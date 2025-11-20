@@ -8,12 +8,25 @@ type TicketItem = Database['public']['Tables']['ticket_items']['Row']
 
 export class TicketService {
   /**
+   * Sanitize filename for storage (remove special characters)
+   */
+  private sanitizeFileName(fileName: string): string {
+    return fileName
+      .normalize('NFD')
+      .replace(/[\u0300-\u036f]/g, '') // Remove accents
+      .replace(/[^a-zA-Z0-9._-]/g, '_') // Replace special chars with underscore
+      .replace(/_+/g, '_') // Replace multiple underscores with single
+      .toLowerCase()
+  }
+
+  /**
    * Upload a PDF ticket file and parse it
    */
   async uploadAndParseTicket(file: File, userId: string): Promise<Ticket> {
     try {
       // 1. Upload PDF to Supabase Storage
-      const fileName = `${userId}/${Date.now()}-${file.name}`
+      const sanitizedName = this.sanitizeFileName(file.name)
+      const fileName = `${userId}/${Date.now()}-${sanitizedName}`
       const { error: uploadError } = await supabase.storage
         .from('tickets')
         .upload(fileName, file, {
