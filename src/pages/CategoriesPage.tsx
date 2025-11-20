@@ -108,8 +108,31 @@ export default function CategoriesPage() {
     }
   }
 
-  const emojiPresets = ['🥬', '🥩', '🥛', '🍞', '🥤', '🥫', '❄️', '🧹', '🧴', '🍿', '🍎', '🥕', '🍗', '🧀', '🥐', '🍺', '🌾', '🍦', '🧽', '💊', '📦']
-  const colorPresets = ['#22c55e', '#ef4444', '#f59e0b', '#d97706', '#3b82f6', '#8b5cf6', '#06b6d4', '#84cc16', '#ec4899', '#f97316', '#6b7280']
+  const emojiPresets = [
+    // Frutas y Verduras
+    '🥬', '🍎', '🍊', '🍋', '🍌', '🍉', '🍇', '🍓', '🫐', '🍑', '🥝', '🍅', '🥕', '🥔', '🥦', '🌽', '🫑', '🥒',
+    // Carnes y Pescados
+    '🥩', '🍗', '🍖', '🥓', '🍤', '🦐', '🦞', '🐟', '🐠', '🦀', '🦑',
+    // Lácteos y Huevos
+    '🥛', '🧀', '🧈', '🥚',
+    // Pan y Bollería
+    '🍞', '🥐', '🥖', '🥯', '🧁', '🎂', '🍰',
+    // Bebidas
+    '🥤', '☕', '🍵', '🧃', '🧋', '🍺', '🍻', '🍷', '🥂', '🍾', '🧊',
+    // Despensa
+    '🥫', '🌾', '🍚', '🍝', '🫘', '🫙',
+    // Congelados
+    '❄️', '🍦', '🧊',
+    // Limpieza e Higiene
+    '🧹', '🧽', '🧴', '🧼', '🧻', '🪥', '💊', '💉',
+    // Snacks y Dulces
+    '🍿', '🍫', '🍬', '🍭', '🍪', '🥨', '🍩', '🍮',
+    // Bebé y Mascotas
+    '🍼', '🐕', '🐈', '🐾',
+    // Otros
+    '📦', '🛒', '🏪', '🎁', '⭐', '✨', '🔥', '💚', '💙', '❤️'
+  ]
+  const colorPresets = ['#22c55e', '#ef4444', '#f59e0b', '#d97706', '#3b82f6', '#8b5cf6', '#06b6d4', '#84cc16', '#ec4899', '#f97316', '#6b7280', '#10b981', '#06b6d4', '#8b5cf6', '#ec4899']
 
   return (
     <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-6 sm:py-8">
@@ -273,7 +296,7 @@ export default function CategoriesPage() {
                 <label className="block text-sm font-medium text-secondary-700 mb-2">
                   Icono (emoji)
                 </label>
-                <div className="flex items-center gap-2 mb-2">
+                <div className="flex items-center gap-2 mb-3">
                   <input
                     type="text"
                     value={formData.icon}
@@ -282,20 +305,28 @@ export default function CategoriesPage() {
                     className="w-20 px-4 py-2 border border-secondary-300 rounded-lg focus:ring-2 focus:ring-primary-500 focus:border-transparent text-center text-2xl"
                     maxLength={2}
                   />
-                  <span className="text-sm text-secondary-600">o selecciona uno:</span>
+                  <div className="flex-1">
+                    <span className="text-sm text-secondary-600">Escribe o pega cualquier emoji, o selecciona uno:</span>
+                    <p className="text-xs text-secondary-500 mt-0.5">
+                      Tip: En Mac presiona <kbd className="px-1.5 py-0.5 bg-secondary-100 rounded text-xs">⌘ Ctrl Espacio</kbd> para el selector de emojis
+                    </p>
+                  </div>
                 </div>
-                <div className="flex flex-wrap gap-2">
-                  {emojiPresets.map((emoji) => (
-                    <button
-                      key={emoji}
-                      onClick={() => setFormData({ ...formData, icon: emoji })}
-                      className={`w-10 h-10 rounded-lg flex items-center justify-center text-xl hover:bg-secondary-100 transition-colors ${
-                        formData.icon === emoji ? 'bg-primary-100 ring-2 ring-primary-500' : 'bg-secondary-50'
-                      }`}
-                    >
-                      {emoji}
-                    </button>
-                  ))}
+                <div className="max-h-48 overflow-y-auto border border-secondary-200 rounded-lg p-2 bg-secondary-50">
+                  <div className="flex flex-wrap gap-1">
+                    {emojiPresets.map((emoji, idx) => (
+                      <button
+                        key={idx}
+                        onClick={() => setFormData({ ...formData, icon: emoji })}
+                        className={`w-10 h-10 rounded-lg flex items-center justify-center text-xl hover:bg-white transition-colors ${
+                          formData.icon === emoji ? 'bg-primary-100 ring-2 ring-primary-500' : 'bg-white'
+                        }`}
+                        title={emoji}
+                      >
+                        {emoji}
+                      </button>
+                    ))}
+                  </div>
                 </div>
               </div>
 
