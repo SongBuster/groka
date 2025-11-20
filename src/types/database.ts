@@ -56,25 +56,69 @@ export interface Database {
           updated_at?: string
         }
       }
-      products: {
+      categories: {
         Row: {
           id: string
           name: string
-          category: string | null
+          description: string | null
+          icon: string | null
+          color: string | null
+          keywords: string[] | null
           created_at: string
           updated_at: string
         }
         Insert: {
           id?: string
           name: string
-          category?: string | null
+          description?: string | null
+          icon?: string | null
+          color?: string | null
+          keywords?: string[] | null
           created_at?: string
           updated_at?: string
         }
         Update: {
           id?: string
           name?: string
-          category?: string | null
+          description?: string | null
+          icon?: string | null
+          color?: string | null
+          keywords?: string[] | null
+          created_at?: string
+          updated_at?: string
+        }
+      }
+      products: {
+        Row: {
+          id: string
+          name: string
+          alias: string | null
+          category_id: string | null
+          review_status: 'pending' | 'uncategorized' | 'reviewed'
+          last_reviewed_at: string | null
+          last_reviewed_by: string | null
+          created_at: string
+          updated_at: string
+        }
+        Insert: {
+          id?: string
+          name: string
+          alias?: string | null
+          category_id?: string | null
+          review_status?: 'pending' | 'uncategorized' | 'reviewed'
+          last_reviewed_at?: string | null
+          last_reviewed_by?: string | null
+          created_at?: string
+          updated_at?: string
+        }
+        Update: {
+          id?: string
+          name?: string
+          alias?: string | null
+          category_id?: string | null
+          review_status?: 'pending' | 'uncategorized' | 'reviewed'
+          last_reviewed_at?: string | null
+          last_reviewed_by?: string | null
           created_at?: string
           updated_at?: string
         }

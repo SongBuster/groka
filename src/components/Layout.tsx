@@ -34,9 +34,9 @@ export default function Layout() {
               <div className="p-2 bg-primary-500 rounded-lg shadow-lg shadow-primary-500/30">
                 <span className="text-2xl">🛒</span>
               </div>
-              <div className="hidden sm:block">
-                <h1 className="text-xl font-bold text-primary-700">Groka</h1>
-                <p className="text-xs text-secondary-600">{user?.email}</p>
+              <div>
+                <h1 className="text-lg sm:text-xl font-bold text-primary-700">Groka</h1>
+                <p className="text-xs text-secondary-600 truncate max-w-[150px] sm:max-w-none">{user?.email}</p>
               </div>
             </Link>
 
