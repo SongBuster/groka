@@ -113,13 +113,21 @@ export default function ProductsPage() {
   return (
     <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-6 sm:py-8">
       {/* Header */}
-      <div className="mb-8">
-        <h1 className="text-3xl sm:text-4xl font-bold text-secondary-900 mb-2">
-          Productos
-        </h1>
-        <p className="text-secondary-600">
-          Gestiona tus productos y categorías
-        </p>
+      <div className="mb-8 flex justify-between items-start">
+        <div>
+          <h1 className="text-3xl sm:text-4xl font-bold text-secondary-900 mb-2">
+            Productos
+          </h1>
+          <p className="text-secondary-600">
+            Gestiona tus productos y categorías
+          </p>
+        </div>
+        <a
+          href="/categories"
+          className="flex items-center gap-2 px-4 py-2 text-primary-700 border border-primary-300 rounded-lg hover:bg-primary-50 transition-colors"
+        >
+          <span className="text-sm font-medium">Gestionar categorías</span>
+        </a>
       </div>
 
       {/* Stats Cards */}

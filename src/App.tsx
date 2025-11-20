@@ -6,6 +6,7 @@ import Layout from './components/Layout'
 import DashboardPage from './pages/DashboardPage'
 import TicketsPage from './pages/TicketsPage'
 import ProductsPage from './pages/ProductsPage'
+import CategoriesPage from './pages/CategoriesPage'
 import ListsPage from './pages/ListsPage'
 import { Loader2 } from 'lucide-react'
 
@@ -48,6 +49,7 @@ function App() {
           <Route path="dashboard" element={<DashboardPage />} />
           <Route path="tickets" element={<TicketsPage />} />
           <Route path="products" element={<ProductsPage />} />
+          <Route path="categories" element={<CategoriesPage />} />
           <Route path="lists" element={<ListsPage />} />
         </Route>
       </Routes>
