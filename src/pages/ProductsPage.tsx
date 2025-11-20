@@ -1,5 +1,5 @@
 import { useState, useEffect } from 'react'
-import { Search, CheckCircle, AlertCircle, Clock, Edit2 } from 'lucide-react'
+import { Search, CheckCircle, AlertCircle, Clock, Edit2, Plus } from 'lucide-react'
 import productService, { type ProductWithCategory } from '../services/productService'
 import categoryService from '../services/categoryService'
 import type { Database } from '../types/database'
@@ -18,6 +18,12 @@ export default function ProductsPage() {
   const [selectedCategory, setSelectedCategory] = useState<string | null>(null)
   const [editingProduct, setEditingProduct] = useState<ProductWithCategory | null>(null)
   const [showEditModal, setShowEditModal] = useState(false)
+  const [showCreateModal, setShowCreateModal] = useState(false)
+  const [newProduct, setNewProduct] = useState({
+    name: '',
+    alias: '',
+    category_id: '',
+  })
 
   useEffect(() => {
     loadData()
@@ -56,6 +62,24 @@ export default function ProductsPage() {
       setEditingProduct(null)
     } catch (error) {
       console.error('Error updating product:', error)
+    }
+  }
+
+  const handleCreateProduct = async () => {
+    if (!newProduct.name.trim()) return
+
+    try {
+      await productService.create({
+        name: newProduct.name.trim(),
+        alias: newProduct.alias.trim() || null,
+        category_id: newProduct.category_id || null,
+      })
+      await loadData()
+      setShowCreateModal(false)
+      setNewProduct({ name: '', alias: '', category_id: '' })
+    } catch (error) {
+      console.error('Error creating product:', error)
+      alert('Error al crear el producto. Puede que ya exista.')
     }
   }
 
@@ -113,7 +137,7 @@ export default function ProductsPage() {
   return (
     <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-6 sm:py-8">
       {/* Header */}
-      <div className="mb-8 flex justify-between items-start">
+      <div className="mb-8 flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4">
         <div>
           <h1 className="text-3xl sm:text-4xl font-bold text-secondary-900 mb-2">
             Productos
@@ -122,12 +146,21 @@ export default function ProductsPage() {
             Gestiona tus productos y categorías
           </p>
         </div>
-        <a
-          href="/categories"
-          className="flex items-center gap-2 px-4 py-2 text-primary-700 border border-primary-300 rounded-lg hover:bg-primary-50 transition-colors"
-        >
-          <span className="text-sm font-medium">Gestionar categorías</span>
-        </a>
+        <div className="flex gap-2">
+          <button
+            onClick={() => setShowCreateModal(true)}
+            className="flex items-center gap-2 px-4 py-2 bg-primary-600 text-white rounded-lg hover:bg-primary-700 transition-colors shadow-lg shadow-primary-500/30"
+          >
+            <Plus className="w-5 h-5" />
+            <span>Nuevo Producto</span>
+          </button>
+          <a
+            href="/categories"
+            className="flex items-center gap-2 px-4 py-2 text-primary-700 border border-primary-300 rounded-lg hover:bg-primary-50 transition-colors"
+          >
+            <span className="text-sm font-medium">Categorías</span>
+          </a>
+        </div>
       </div>
 
       {/* Stats Cards */}
@@ -359,6 +392,89 @@ export default function ProductsPage() {
                 className="flex-1 px-4 py-2 bg-primary-600 text-white rounded-lg hover:bg-primary-700 transition-colors"
               >
                 Guardar
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Create Product Modal */}
+      {showCreateModal && (
+        <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50 p-4">
+          <div className="bg-white rounded-2xl max-w-md w-full p-6">
+            <h3 className="text-xl font-bold text-secondary-900 mb-4">
+              Nuevo Producto
+            </h3>
+            
+            <div className="space-y-4">
+              <div>
+                <label className="block text-sm font-medium text-secondary-700 mb-1">
+                  Nombre del producto *
+                </label>
+                <input
+                  type="text"
+                  value={newProduct.name}
+                  onChange={(e) => setNewProduct({ ...newProduct, name: e.target.value })}
+                  placeholder="Ej: Cerveza 0,0 Tostada Pack-6"
+                  className="w-full px-4 py-2 border border-secondary-300 rounded-lg focus:ring-2 focus:ring-primary-500 focus:border-transparent"
+                  autoFocus
+                />
+              </div>
+
+              <div>
+                <label className="block text-sm font-medium text-secondary-700 mb-1">
+                  Alias (nombre para listas)
+                </label>
+                <input
+                  type="text"
+                  value={newProduct.alias}
+                  onChange={(e) => setNewProduct({ ...newProduct, alias: e.target.value })}
+                  placeholder="Ej: Cerveza 0 Tostada"
+                  className="w-full px-4 py-2 border border-secondary-300 rounded-lg focus:ring-2 focus:ring-primary-500 focus:border-transparent"
+                />
+                <p className="text-xs text-secondary-600 mt-1">
+                  Este será el nombre que aparecerá en las listas de la compra
+                </p>
+              </div>
+
+              <div>
+                <label className="block text-sm font-medium text-secondary-700 mb-1">
+                  Categoría
+                </label>
+                <select
+                  value={newProduct.category_id}
+                  onChange={(e) => setNewProduct({ ...newProduct, category_id: e.target.value })}
+                  className="w-full px-4 py-2 border border-secondary-300 rounded-lg focus:ring-2 focus:ring-primary-500 focus:border-transparent"
+                >
+                  <option value="">Sin categoría (se asignará automáticamente)</option>
+                  {categories.map(cat => (
+                    <option key={cat.id} value={cat.id}>
+                      {cat.icon} {cat.name}
+                    </option>
+                  ))}
+                </select>
+                <p className="text-xs text-secondary-600 mt-1">
+                  Si no seleccionas una categoría, se intentará asignar automáticamente según el nombre
+                </p>
+              </div>
+            </div>
+
+            <div className="flex gap-3 mt-6">
+              <button
+                onClick={() => {
+                  setShowCreateModal(false)
+                  setNewProduct({ name: '', alias: '', category_id: '' })
+                }}
+                className="flex-1 px-4 py-2 border border-secondary-300 text-secondary-700 rounded-lg hover:bg-secondary-50 transition-colors"
+              >
+                Cancelar
+              </button>
+              <button
+                onClick={handleCreateProduct}
+                disabled={!newProduct.name.trim()}
+                className="flex-1 px-4 py-2 bg-primary-600 text-white rounded-lg hover:bg-primary-700 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+              >
+                Crear producto
               </button>
             </div>
           </div>
