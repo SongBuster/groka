@@ -145,45 +145,19 @@ export default function CategoriesPage() {
   return (
     <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-6 sm:py-8">
       {/* Header */}
-      <div className="mb-8 flex justify-between items-start">
-        <div>
-          <h1 className="text-3xl sm:text-4xl font-bold text-secondary-900 mb-2">
-            Categorías
-          </h1>
-          <p className="text-secondary-600">
-            Gestiona las categorías para organizar tus productos
-          </p>
-        </div>
-        <button
-          onClick={() => handleOpenModal()}
-          className="flex items-center gap-2 px-4 py-2 bg-primary-600 text-white rounded-lg hover:bg-primary-700 transition-colors shadow-lg shadow-primary-500/30"
-        >
-          <Plus className="w-5 h-5" />
-          <span className="hidden sm:inline">Nueva Categoría</span>
-        </button>
+      <div className="mb-8">
+        <h1 className="text-3xl sm:text-4xl font-bold text-secondary-900 mb-2">
+          Categorías
+        </h1>
+        <p className="text-secondary-600">
+          Gestiona las categorías para organizar tus productos
+        </p>
       </div>
 
       {/* Categories Grid */}
       {loading ? (
         <div className="text-center py-12">
           <div className="text-secondary-600">Cargando categorías...</div>
-        </div>
-      ) : categories.length === 0 ? (
-        <div className="text-center py-16 bg-white rounded-2xl border-2 border-dashed border-secondary-300">
-          <div className="text-6xl mb-4">📁</div>
-          <h3 className="text-lg font-semibold text-secondary-900 mb-2">
-            No hay categorías
-          </h3>
-          <p className="text-secondary-600 text-sm mb-6">
-            Crea tu primera categoría para organizar tus productos
-          </p>
-          <button
-            onClick={() => handleOpenModal()}
-            className="inline-flex items-center gap-2 px-6 py-3 bg-primary-600 text-white rounded-lg hover:bg-primary-700 transition-colors shadow-lg shadow-primary-500/30"
-          >
-            <Plus className="w-5 h-5" />
-            Crear primera categoría
-          </button>
         </div>
       ) : (
         <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
@@ -247,6 +221,24 @@ export default function CategoriesPage() {
               </div>
             </div>
           ))}
+
+          {/* Card to create new category - always at the end */}
+          <button
+            onClick={() => handleOpenModal()}
+            className="bg-white rounded-xl p-6 border-2 border-dashed border-primary-300 hover:border-primary-500 hover:bg-primary-50 transition-all group"
+          >
+            <div className="flex flex-col items-center justify-center h-full min-h-[200px] text-center">
+              <div className="w-16 h-16 rounded-full bg-primary-100 group-hover:bg-primary-200 flex items-center justify-center mb-4 transition-colors">
+                <Plus className="w-8 h-8 text-primary-600" />
+              </div>
+              <h3 className="font-semibold text-primary-700 text-lg mb-2">
+                Nueva Categoría
+              </h3>
+              <p className="text-sm text-secondary-600">
+                Haz clic para crear una nueva categoría
+              </p>
+            </div>
+          </button>
         </div>
       )}
 
