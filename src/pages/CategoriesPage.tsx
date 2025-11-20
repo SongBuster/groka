@@ -194,9 +194,6 @@ export default function CategoriesPage() {
                   </div>
                   <div>
                     <h3 className="font-semibold text-secondary-900">{category.name}</h3>
-                    {category.description && (
-                      <p className="text-sm text-secondary-600 mt-1">{category.description}</p>
-                    )}
                   </div>
                 </div>
               </div>
@@ -274,20 +271,6 @@ export default function CategoriesPage() {
                   placeholder="Ej: Frutas y Verduras"
                   className="w-full px-4 py-2 border border-secondary-300 rounded-lg focus:ring-2 focus:ring-primary-500 focus:border-transparent"
                   required
-                />
-              </div>
-
-              {/* Description */}
-              <div>
-                <label className="block text-sm font-medium text-secondary-700 mb-1">
-                  Descripción
-                </label>
-                <input
-                  type="text"
-                  value={formData.description}
-                  onChange={(e) => setFormData({ ...formData, description: e.target.value })}
-                  placeholder="Ej: Productos frescos"
-                  className="w-full px-4 py-2 border border-secondary-300 rounded-lg focus:ring-2 focus:ring-primary-500 focus:border-transparent"
                 />
               </div>
 
