@@ -50,8 +50,8 @@ export default function AuthForm() {
           {/* Features */}
           <div className="space-y-4 pt-4">
             <div className="flex items-start gap-4">
-              <div className="flex-shrink-0 w-12 h-12 bg-blue-100 rounded-lg flex items-center justify-center">
-                <ShoppingCart className="w-6 h-6 text-blue-600" />
+              <div className="flex-shrink-0 w-12 h-12 bg-primary-100 rounded-lg flex items-center justify-center shadow-sm">
+                <ShoppingCart className="w-6 h-6 text-primary-600" />
               </div>
               <div>
                 <h3 className="font-semibold text-gray-900 mb-1">Listas inteligentes</h3>
@@ -60,8 +60,8 @@ export default function AuthForm() {
             </div>
 
             <div className="flex items-start gap-4">
-              <div className="flex-shrink-0 w-12 h-12 bg-green-100 rounded-lg flex items-center justify-center">
-                <BarChart3 className="w-6 h-6 text-green-600" />
+              <div className="flex-shrink-0 w-12 h-12 bg-primary-100 rounded-lg flex items-center justify-center shadow-sm">
+                <BarChart3 className="w-6 h-6 text-primary-600" />
               </div>
               <div>
                 <h3 className="font-semibold text-gray-900 mb-1">Análisis de gastos</h3>
@@ -70,8 +70,8 @@ export default function AuthForm() {
             </div>
 
             <div className="flex items-start gap-4">
-              <div className="flex-shrink-0 w-12 h-12 bg-purple-100 rounded-lg flex items-center justify-center">
-                <Users className="w-6 h-6 text-purple-600" />
+              <div className="flex-shrink-0 w-12 h-12 bg-primary-100 rounded-lg flex items-center justify-center shadow-sm">
+                <Users className="w-6 h-6 text-primary-600" />
               </div>
               <div>
                 <h3 className="font-semibold text-gray-900 mb-1">Comparte con tu familia</h3>
@@ -86,17 +86,17 @@ export default function AuthForm() {
           <div className="bg-white rounded-2xl shadow-xl p-6 sm:p-8 lg:p-10">
             {/* Mobile Header - solo visible en móvil */}
             <div className="lg:hidden text-center mb-6">
-              <h1 className="text-3xl sm:text-4xl font-bold text-gray-900 mb-2">
+              <h1 className="text-3xl sm:text-4xl font-bold text-primary-700 mb-2">
                 🛒 Groka
               </h1>
-              <p className="text-gray-600">Tu lista de compra inteligente</p>
+              <p className="text-secondary-600">Tu lista de compra inteligente</p>
             </div>
 
             <div className="mb-6">
-              <h2 className="text-2xl sm:text-3xl font-bold text-gray-900 mb-2">
+              <h2 className="text-2xl sm:text-3xl font-bold text-secondary-900 mb-2">
                 {isSignUp ? '¡Únete a Groka!' : 'Bienvenido de nuevo'}
               </h2>
-              <p className="text-gray-600">
+              <p className="text-secondary-600">
                 {isSignUp 
                   ? 'Crea tu cuenta y empieza a organizar tus compras' 
                   : 'Inicia sesión para continuar'}
@@ -115,7 +115,7 @@ export default function AuthForm() {
                     type="email"
                     value={email}
                     onChange={(e) => setEmail(e.target.value)}
-                    className="w-full pl-11 pr-4 py-3 border border-gray-300 rounded-xl focus:ring-2 focus:ring-blue-500 focus:border-transparent transition-all"
+                    className="w-full pl-11 pr-4 py-3 border border-gray-300 rounded-xl focus:ring-2 focus:ring-primary-500 focus:border-transparent transition-all"
                     placeholder="tu@email.com"
                     required
                   />
@@ -133,7 +133,7 @@ export default function AuthForm() {
                     type="password"
                     value={password}
                     onChange={(e) => setPassword(e.target.value)}
-                    className="w-full pl-11 pr-4 py-3 border border-gray-300 rounded-xl focus:ring-2 focus:ring-blue-500 focus:border-transparent transition-all"
+                    className="w-full pl-11 pr-4 py-3 border border-gray-300 rounded-xl focus:ring-2 focus:ring-primary-500 focus:border-transparent transition-all"
                     placeholder="••••••••"
                     required
                     minLength={6}
@@ -159,7 +159,7 @@ export default function AuthForm() {
               <button
                 type="submit"
                 disabled={loading}
-                className="w-full py-3 sm:py-3.5 px-4 bg-gradient-to-r from-blue-600 to-blue-700 hover:from-blue-700 hover:to-blue-800 text-white font-semibold rounded-xl transition-all disabled:opacity-50 disabled:cursor-not-allowed flex items-center justify-center gap-2 shadow-lg shadow-blue-500/30"
+                className="w-full py-3 sm:py-3.5 px-4 bg-gradient-to-r from-primary-600 to-primary-700 hover:from-primary-700 hover:to-primary-800 text-white font-semibold rounded-xl transition-all disabled:opacity-50 disabled:cursor-not-allowed flex items-center justify-center gap-2 shadow-lg shadow-primary-500/30"
               >
                 {loading ? (
                   <>
@@ -190,15 +190,15 @@ export default function AuthForm() {
             {/* Features for mobile - solo visible en móvil */}
             <div className="lg:hidden mt-8 pt-6 border-t border-gray-200 space-y-4">
               <div className="flex items-center gap-3 text-sm text-gray-600">
-                <ShoppingCart className="w-5 h-5 text-blue-600 flex-shrink-0" />
+                <ShoppingCart className="w-5 h-5 text-primary-600 flex-shrink-0" />
                 <span>Listas de compra inteligentes</span>
               </div>
               <div className="flex items-center gap-3 text-sm text-gray-600">
-                <BarChart3 className="w-5 h-5 text-green-600 flex-shrink-0" />
+                <BarChart3 className="w-5 h-5 text-primary-600 flex-shrink-0" />
                 <span>Análisis de gastos</span>
               </div>
               <div className="flex items-center gap-3 text-sm text-gray-600">
-                <Users className="w-5 h-5 text-purple-600 flex-shrink-0" />
+                <Users className="w-5 h-5 text-primary-600 flex-shrink-0" />
                 <span>Comparte con tu familia</span>
               </div>
             </div>
