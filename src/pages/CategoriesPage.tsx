@@ -65,10 +65,18 @@ export default function CategoriesPage() {
   }
 
   const handleAddKeyword = () => {
-    if (keywordInput.trim() && !formData.keywords.includes(keywordInput.trim().toLowerCase())) {
+    if (!keywordInput.trim()) return
+
+    // Separar por comas, limpiar espacios y convertir a minúsculas
+    const newKeywords = keywordInput
+      .split(',')
+      .map(k => k.trim().toLowerCase())
+      .filter(k => k && !formData.keywords.includes(k))
+
+    if (newKeywords.length > 0) {
       setFormData({
         ...formData,
-        keywords: [...formData.keywords, keywordInput.trim().toLowerCase()],
+        keywords: [...formData.keywords, ...newKeywords],
       })
       setKeywordInput('')
     }
