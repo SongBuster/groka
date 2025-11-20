@@ -4,12 +4,14 @@ import productService, { type ProductWithCategory } from '../services/productSer
 import categoryService from '../services/categoryService'
 import type { Database } from '../types/database'
 import { useAuthStore } from '../stores/authStore'
+import { useDialog } from '../hooks/useDialog'
 
 type Category = Database['public']['Tables']['categories']['Row']
 type ReviewStatus = 'pending' | 'uncategorized' | 'reviewed' | 'all'
 
 export default function ProductsPage() {
   const { user } = useAuthStore()
+  const { alert, DialogComponent } = useDialog()
   const [products, setProducts] = useState<ProductWithCategory[]>([])
   const [categories, setCategories] = useState<Category[]>([])
   const [loading, setLoading] = useState(true)
@@ -24,6 +26,10 @@ export default function ProductsPage() {
     alias: '',
     category_id: '',
   })
+  const [categorySearch, setCategorySearch] = useState('')
+  const [showCategoryDropdown, setShowCategoryDropdown] = useState(false)
+  const [categorySearchEdit, setCategorySearchEdit] = useState('')
+  const [showCategoryDropdownEdit, setShowCategoryDropdownEdit] = useState(false)
 
   useEffect(() => {
     loadData()
@@ -77,9 +83,18 @@ export default function ProductsPage() {
       await loadData()
       setShowCreateModal(false)
       setNewProduct({ name: '', alias: '', category_id: '' })
+      alert({
+        title: 'Producto creado',
+        message: 'El producto se ha creado correctamente',
+        type: 'success'
+      })
     } catch (error) {
       console.error('Error creating product:', error)
-      alert('Error al crear el producto. Puede que ya exista.')
+      alert({
+        title: 'Error',
+        message: 'No se pudo crear el producto. Puede que ya exista.',
+        type: 'error'
+      })
     }
   }
 
@@ -362,18 +377,57 @@ export default function ProductsPage() {
                 <label className="block text-sm font-medium text-secondary-700 mb-1">
                   Categoría
                 </label>
-                <select
-                  value={editingProduct.category_id || ''}
-                  onChange={(e) => setEditingProduct({ ...editingProduct, category_id: e.target.value || null })}
-                  className="w-full px-4 py-2 border border-secondary-300 rounded-lg focus:ring-2 focus:ring-primary-500 focus:border-transparent"
-                >
-                  <option value="">Sin categoría</option>
-                  {categories.map(cat => (
-                    <option key={cat.id} value={cat.id}>
-                      {cat.icon} {cat.name}
-                    </option>
-                  ))}
-                </select>
+                <div className="relative">
+                  <input
+                    type="text"
+                    value={categorySearchEdit}
+                    onChange={(e) => {
+                      setCategorySearchEdit(e.target.value)
+                      setShowCategoryDropdownEdit(true)
+                    }}
+                    onFocus={() => setShowCategoryDropdownEdit(true)}
+                    onBlur={() => setTimeout(() => setShowCategoryDropdownEdit(false), 200)}
+                    placeholder={editingProduct.category ? `${editingProduct.category.icon} ${editingProduct.category.name}` : 'Escribe para buscar...'}
+                    className="w-full px-4 py-2 border-2 border-primary-300 rounded-lg focus:ring-2 focus:ring-primary-500 focus:border-primary-500 transition-all"
+                  />
+                  {showCategoryDropdownEdit && (
+                    <div className="absolute top-full left-0 right-0 mt-1 bg-white border border-secondary-300 rounded-lg shadow-lg max-h-64 overflow-y-auto z-50">
+                      <div
+                        className="px-4 py-3 hover:bg-secondary-50 cursor-pointer transition-colors"
+                        onClick={() => {
+                          setEditingProduct({ ...editingProduct, category_id: null, category: null })
+                          setCategorySearchEdit('')
+                          setShowCategoryDropdownEdit(false)
+                        }}
+                      >
+                        <span className="inline-block px-3 py-1 rounded-lg text-white text-sm font-semibold" style={{ backgroundColor: '#9ca3af' }}>
+                          Sin categoría
+                        </span>
+                      </div>
+                      {categories
+                        .filter(cat => 
+                          categorySearchEdit === '' || 
+                          cat.name.toLowerCase().includes(categorySearchEdit.toLowerCase())
+                        )
+                        .sort((a, b) => a.name.localeCompare(b.name))
+                        .map(cat => (
+                          <div
+                            key={cat.id}
+                            className="px-4 py-3 hover:bg-secondary-50 cursor-pointer transition-colors"
+                            onClick={() => {
+                              setEditingProduct({ ...editingProduct, category_id: cat.id, category: cat })
+                              setCategorySearchEdit('')
+                              setShowCategoryDropdownEdit(false)
+                            }}
+                          >
+                            <span className="inline-block px-3 py-1 rounded-lg text-white text-sm font-semibold" style={{ backgroundColor: cat.color || '#6b7280' }}>
+                              {cat.icon} {cat.name}
+                            </span>
+                          </div>
+                        ))}
+                    </div>
+                  )}
+                </div>
               </div>
             </div>
 
@@ -441,18 +495,57 @@ export default function ProductsPage() {
                 <label className="block text-sm font-medium text-secondary-700 mb-1">
                   Categoría
                 </label>
-                <select
-                  value={newProduct.category_id}
-                  onChange={(e) => setNewProduct({ ...newProduct, category_id: e.target.value })}
-                  className="w-full px-4 py-2 border border-secondary-300 rounded-lg focus:ring-2 focus:ring-primary-500 focus:border-transparent"
-                >
-                  <option value="">Sin categoría (se asignará automáticamente)</option>
-                  {categories.map(cat => (
-                    <option key={cat.id} value={cat.id}>
-                      {cat.icon} {cat.name}
-                    </option>
-                  ))}
-                </select>
+                <div className="relative">
+                  <input
+                    type="text"
+                    value={categorySearch}
+                    onChange={(e) => {
+                      setCategorySearch(e.target.value)
+                      setShowCategoryDropdown(true)
+                    }}
+                    onFocus={() => setShowCategoryDropdown(true)}
+                    onBlur={() => setTimeout(() => setShowCategoryDropdown(false), 200)}
+                    placeholder={newProduct.category_id ? categories.find(c => c.id === newProduct.category_id)?.name || 'Escribe para buscar...' : 'Escribe para buscar...'}
+                    className="w-full px-4 py-2 border-2 border-primary-300 rounded-lg focus:ring-2 focus:ring-primary-500 focus:border-primary-500 transition-all"
+                  />
+                  {showCategoryDropdown && (
+                    <div className="absolute top-full left-0 right-0 mt-1 bg-white border border-secondary-300 rounded-lg shadow-lg max-h-64 overflow-y-auto z-50">
+                      <div
+                        className="px-4 py-3 hover:bg-secondary-50 cursor-pointer transition-colors"
+                        onClick={() => {
+                          setNewProduct({ ...newProduct, category_id: '' })
+                          setCategorySearch('')
+                          setShowCategoryDropdown(false)
+                        }}
+                      >
+                        <span className="inline-block px-3 py-1 rounded-lg text-white text-sm font-semibold" style={{ backgroundColor: '#9ca3af' }}>
+                          Sin categoría
+                        </span>
+                      </div>
+                      {categories
+                        .filter(cat => 
+                          categorySearch === '' || 
+                          cat.name.toLowerCase().includes(categorySearch.toLowerCase())
+                        )
+                        .sort((a, b) => a.name.localeCompare(b.name))
+                        .map(cat => (
+                          <div
+                            key={cat.id}
+                            className="px-4 py-3 hover:bg-secondary-50 cursor-pointer transition-colors"
+                            onClick={() => {
+                              setNewProduct({ ...newProduct, category_id: cat.id })
+                              setCategorySearch('')
+                              setShowCategoryDropdown(false)
+                            }}
+                          >
+                            <span className="inline-block px-3 py-1 rounded-lg text-white text-sm font-semibold" style={{ backgroundColor: cat.color || '#6b7280' }}>
+                              {cat.icon} {cat.name}
+                            </span>
+                          </div>
+                        ))}
+                    </div>
+                  )}
+                </div>
                 <p className="text-xs text-secondary-600 mt-1">
                   Si no seleccionas una categoría, se intentará asignar automáticamente según el nombre
                 </p>
@@ -480,6 +573,9 @@ export default function ProductsPage() {
           </div>
         </div>
       )}
+
+      {/* Dialog Component */}
+      <DialogComponent />
     </div>
   )
 }

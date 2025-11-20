@@ -208,6 +208,195 @@ export class TicketService {
   }
 
   /**
+   * Create a manual ticket (without PDF)
+   */
+  async createManualTicket(
+    userId: string,
+    storeName: string,
+    purchaseDate: string,
+    ticketNumber: string | null,
+    products: Array<{
+      product_id: string | null
+      name: string
+      product_type: 'unit' | 'weight'
+      quantity: number
+      unit_price: number
+      total: number
+    }>
+  ): Promise<Ticket> {
+    try {
+      // Calculate total amount
+      const totalAmount = products.reduce((sum, p) => sum + p.total, 0)
+
+      // Convert datetime-local format (YYYY-MM-DDTHH:mm) to ISO timestamp
+      const purchaseTimestamp = new Date(purchaseDate).toISOString()
+
+      // Create ticket record
+      const ticketData: TicketInsert = {
+        user_id: userId,
+        file_name: 'Manual',
+        file_url: null,
+        ticket_number: ticketNumber,
+        store_name: storeName,
+        purchase_date: purchaseTimestamp,
+        total_amount: totalAmount,
+        parsed: true, // Manual tickets are already "parsed"
+        parsing_error: null
+      }
+
+      const { data: ticket, error: ticketError } = await supabase
+        .from('tickets')
+        .insert(ticketData as any)
+        .select()
+        .single() as { data: Ticket | null, error: any }
+
+      if (ticketError) throw ticketError
+      if (!ticket) throw new Error('Failed to create ticket')
+
+      // Process products and save ticket items
+      if (products.length > 0) {
+        await this.saveManualTicketItems(ticket.id, products)
+      }
+
+      return ticket
+    } catch (error) {
+      console.error('Error creating manual ticket:', error)
+      throw error
+    }
+  }
+
+  /**
+   * Save manual ticket items (creates products if needed)
+   */
+  private async saveManualTicketItems(
+    ticketId: string, 
+    products: Array<{
+      product_id: string | null
+      name: string
+      product_type: 'unit' | 'weight'
+      quantity: number
+      unit_price: number
+      total: number
+    }>
+  ): Promise<void> {
+    try {
+      const items = []
+
+      for (const product of products) {
+        let productId = product.product_id
+
+        // Si no existe el producto, crearlo
+        if (!productId) {
+          productId = await this.createProductFromTicket(product.name)
+        }
+
+        items.push({
+          ticket_id: ticketId,
+          product_id: productId,
+          name: product.name,
+          quantity: product.quantity,
+          unit_price: product.unit_price,
+          total_price: product.total
+        })
+      }
+
+      const { error } = await supabase.from('ticket_items').insert(items as any)
+      if (error) throw error
+    } catch (error) {
+      console.error('Error saving manual ticket items:', error)
+      throw error
+    }
+  }
+
+  /**
+   * Create a new product from ticket (with auto-categorization)
+   */
+  private async createProductFromTicket(productName: string): Promise<string> {
+    try {
+      // Create product directly (will auto-categorize based on keywords via trigger)
+      const { data: newProduct, error } = await supabase
+        .from('products')
+        .insert({
+          name: productName,
+          alias: null,
+          category_id: null
+        } as any)
+        .select('id')
+        .single() as { data: { id: string } | null, error: any }
+
+      if (error) {
+        console.error('Error creating product:', error)
+        throw error
+      }
+      
+      if (!newProduct) {
+        throw new Error('Failed to create product')
+      }
+
+      return newProduct.id
+    } catch (error) {
+      console.error('Error creating product from ticket:', error)
+      throw error
+    }
+  }
+
+  /**
+   * Update an existing manual ticket
+   */
+  async updateTicket(
+    ticketId: string,
+    storeName: string,
+    purchaseDate: string,
+    ticketNumber: string | null,
+    products: Array<{
+      product_id: string | null
+      name: string
+      product_type: 'unit' | 'weight'
+      quantity: number
+      unit_price: number
+      total: number
+    }>
+  ): Promise<void> {
+    try {
+      // Calculate total amount
+      const totalAmount = products.reduce((sum, p) => sum + p.total, 0)
+
+      // Convert datetime-local format to ISO timestamp
+      const purchaseTimestamp = new Date(purchaseDate).toISOString()
+
+      // Update ticket record
+      const { error: ticketError } = await (supabase
+        .from('tickets')
+        .update({
+          store_name: storeName,
+          ticket_number: ticketNumber,
+          purchase_date: purchaseTimestamp,
+          total_amount: totalAmount,
+          updated_at: new Date().toISOString()
+        }) as any)
+        .eq('id', ticketId)
+
+      if (ticketError) throw ticketError
+
+      // Delete existing items
+      const { error: deleteError } = await supabase
+        .from('ticket_items')
+        .delete()
+        .eq('ticket_id', ticketId)
+
+      if (deleteError) throw deleteError
+
+      // Insert new items
+      if (products.length > 0) {
+        await this.saveManualTicketItems(ticketId, products)
+      }
+    } catch (error) {
+      console.error('Error updating ticket:', error)
+      throw error
+    }
+  }
+
+  /**
    * Delete a ticket
    */
   async deleteTicket(ticketId: string): Promise<void> {

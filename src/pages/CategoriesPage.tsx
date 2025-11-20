@@ -1,11 +1,13 @@
 import { useState, useEffect } from 'react'
 import { Plus, Edit2, Trash2, Save, X } from 'lucide-react'
 import categoryService from '../services/categoryService'
+import { useDialog } from '../hooks/useDialog'
 import type { Database } from '../types/database'
 
 type Category = Database['public']['Tables']['categories']['Row']
 
 export default function CategoriesPage() {
+  const { alert, confirm, DialogComponent } = useDialog()
   const [categories, setCategories] = useState<Category[]>([])
   const [loading, setLoading] = useState(true)
   const [showModal, setShowModal] = useState(false)
@@ -89,31 +91,65 @@ export default function CategoriesPage() {
     })
   }
 
-  const handleSave = async () => {
+  const handleSave = async (closeModal: boolean = true) => {
     try {
       if (editingCategory) {
         await categoryService.update(editingCategory.id, formData)
+        await loadCategories()
+        handleCloseModal()
       } else {
         await categoryService.create(formData)
+        await loadCategories()
+        if (closeModal) {
+          handleCloseModal()
+        } else {
+          // Limpiar formulario pero mantener modal abierto para crear otra
+          setFormData({
+            name: '',
+            description: '',
+            icon: '',
+            color: '#22c55e',
+            keywords: [],
+          })
+          setKeywordInput('')
+        }
       }
-      await loadCategories()
-      handleCloseModal()
     } catch (error) {
       console.error('Error saving category:', error)
-      alert('Error al guardar la categoría')
+      alert({
+        title: 'Error',
+        message: 'No se pudo guardar la categoría. Inténtalo de nuevo.',
+        type: 'error'
+      })
     }
   }
 
-  const handleDelete = async (id: string, name: string) => {
-    if (confirm(`¿Estás seguro de eliminar la categoría "${name}"?`)) {
-      try {
-        await categoryService.delete(id)
-        await loadCategories()
-      } catch (error) {
-        console.error('Error deleting category:', error)
-        alert('Error al eliminar la categoría. Puede que tenga productos asociados.')
+  const handleDelete = (id: string, name: string) => {
+    confirm({
+      title: 'Eliminar categoría',
+      message: `¿Estás seguro de eliminar la categoría "${name}"?\n\nEsta acción no se puede deshacer.`,
+      type: 'error',
+      confirmText: 'Eliminar',
+      cancelText: 'Cancelar',
+      onConfirm: async () => {
+        try {
+          await categoryService.delete(id)
+          await loadCategories()
+          alert({
+            title: 'Categoría eliminada',
+            message: 'La categoría se ha eliminado correctamente',
+            type: 'success'
+          })
+        } catch (error) {
+          console.error('Error deleting category:', error)
+          alert({
+            title: 'Error',
+            message: 'No se pudo eliminar la categoría. Puede que tenga productos asociados.',
+            type: 'error'
+          })
+        }
       }
-    }
+    })
   }
 
   const emojiPresets = [
@@ -140,7 +176,6 @@ export default function CategoriesPage() {
     // Otros
     '📦', '🛒', '🏪', '🎁', '⭐', '✨', '🔥', '💚', '💙', '❤️'
   ]
-  const colorPresets = ['#22c55e', '#ef4444', '#f59e0b', '#d97706', '#3b82f6', '#8b5cf6', '#06b6d4', '#84cc16', '#ec4899', '#f97316', '#6b7280', '#10b981', '#06b6d4', '#8b5cf6', '#ec4899']
 
   return (
     <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-6 sm:py-8">
@@ -313,33 +348,31 @@ export default function CategoriesPage() {
                 <label className="block text-sm font-medium text-secondary-700 mb-2">
                   Color
                 </label>
-                <div className="flex items-center gap-2 mb-2">
+                <div className="flex items-center gap-3">
                   <input
                     type="color"
                     value={formData.color}
                     onChange={(e) => setFormData({ ...formData, color: e.target.value })}
-                    className="w-16 h-10 rounded-lg border border-secondary-300 cursor-pointer"
+                    className="w-20 h-20 rounded-lg border border-secondary-300 cursor-pointer"
+                    title="Haz clic para elegir un color"
                   />
-                  <input
-                    type="text"
-                    value={formData.color}
-                    onChange={(e) => setFormData({ ...formData, color: e.target.value })}
-                    className="flex-1 px-4 py-2 border border-secondary-300 rounded-lg focus:ring-2 focus:ring-primary-500 focus:border-transparent"
-                    placeholder="#22c55e"
-                  />
-                </div>
-                <div className="flex flex-wrap gap-2">
-                  {colorPresets.map((color) => (
-                    <button
-                      key={color}
-                      onClick={() => setFormData({ ...formData, color })}
-                      className={`w-10 h-10 rounded-lg transition-all ${
-                        formData.color === color ? 'ring-2 ring-offset-2 ring-secondary-900' : ''
-                      }`}
-                      style={{ backgroundColor: color }}
-                      title={color}
+                  <div className="flex-1">
+                    <input
+                      type="text"
+                      value={formData.color}
+                      onChange={(e) => {
+                        const value = e.target.value
+                        if (/^#[0-9A-Fa-f]{0,6}$/.test(value) || value === '') {
+                          setFormData({ ...formData, color: value })
+                        }
+                      }}
+                      className="w-full px-4 py-2 border border-secondary-300 rounded-lg focus:ring-2 focus:ring-primary-500 focus:border-transparent font-mono"
+                      placeholder="#22c55e"
                     />
-                  ))}
+                    <p className="text-xs text-secondary-600 mt-1">
+                      Haz clic en el cuadrado de color para abrir el selector
+                    </p>
+                  </div>
                 </div>
               </div>
 
@@ -392,22 +425,46 @@ export default function CategoriesPage() {
             <div className="flex gap-3 mt-4 pt-4 border-t border-secondary-200">
               <button
                 onClick={handleCloseModal}
-                className="flex-1 px-4 py-2 border border-secondary-300 text-secondary-700 rounded-lg hover:bg-secondary-50 transition-colors"
+                className="px-4 py-2 border border-secondary-300 text-secondary-700 rounded-lg hover:bg-secondary-50 transition-colors"
               >
                 Cancelar
               </button>
-              <button
-                onClick={handleSave}
-                disabled={!formData.name.trim()}
-                className="flex-1 flex items-center justify-center gap-2 px-4 py-2 bg-primary-600 text-white rounded-lg hover:bg-primary-700 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
-              >
-                <Save className="w-5 h-5" />
-                {editingCategory ? 'Guardar cambios' : 'Crear categoría'}
-              </button>
+              {editingCategory ? (
+                <button
+                  onClick={() => handleSave(true)}
+                  disabled={!formData.name.trim()}
+                  className="flex-1 flex items-center justify-center gap-2 px-4 py-2 bg-primary-600 text-white rounded-lg hover:bg-primary-700 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+                >
+                  <Save className="w-5 h-5" />
+                  Guardar cambios
+                </button>
+              ) : (
+                <>
+                  <button
+                    onClick={() => handleSave(true)}
+                    disabled={!formData.name.trim()}
+                    className="flex-1 flex items-center justify-center gap-2 px-4 py-2 bg-secondary-600 text-white rounded-lg hover:bg-secondary-700 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+                  >
+                    <Save className="w-5 h-5" />
+                    Guardar
+                  </button>
+                  <button
+                    onClick={() => handleSave(false)}
+                    disabled={!formData.name.trim()}
+                    className="flex-1 flex items-center justify-center gap-2 px-4 py-2 bg-primary-600 text-white rounded-lg hover:bg-primary-700 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+                  >
+                    <Save className="w-5 h-5" />
+                    Guardar y nuevo
+                  </button>
+                </>
+              )}
             </div>
           </div>
         </div>
       )}
+
+      {/* Dialog Component */}
+      <DialogComponent />
     </div>
   )
 }
