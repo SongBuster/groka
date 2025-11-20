@@ -247,9 +247,9 @@ export default function CategoriesPage() {
 
       {/* Modal */}
       {showModal && (
-        <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50 p-4 overflow-y-auto">
-          <div className="bg-white rounded-2xl max-w-2xl w-full p-6 my-8">
-            <div className="flex justify-between items-center mb-6">
+        <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50 p-4">
+          <div className="bg-white rounded-2xl max-w-2xl w-full max-h-[90vh] flex flex-col p-6">
+            <div className="flex justify-between items-center mb-4">
               <h3 className="text-2xl font-bold text-secondary-900">
                 {editingCategory ? 'Editar Categoría' : 'Nueva Categoría'}
               </h3>
@@ -261,7 +261,7 @@ export default function CategoriesPage() {
               </button>
             </div>
 
-            <div className="space-y-4">
+            <div className="space-y-4 overflow-y-auto flex-1 pr-2">
               {/* Name */}
               <div>
                 <label className="block text-sm font-medium text-secondary-700 mb-1">
@@ -296,30 +296,25 @@ export default function CategoriesPage() {
                 <label className="block text-sm font-medium text-secondary-700 mb-2">
                   Icono (emoji)
                 </label>
-                <div className="flex items-center gap-2 mb-3">
+                <div className="flex items-center gap-2 mb-2">
                   <input
                     type="text"
                     value={formData.icon}
                     onChange={(e) => setFormData({ ...formData, icon: e.target.value })}
                     placeholder="🥬"
-                    className="w-20 px-4 py-2 border border-secondary-300 rounded-lg focus:ring-2 focus:ring-primary-500 focus:border-transparent text-center text-2xl"
+                    className="w-16 px-3 py-2 border border-secondary-300 rounded-lg focus:ring-2 focus:ring-primary-500 focus:border-transparent text-center text-2xl"
                     maxLength={2}
                   />
-                  <div className="flex-1">
-                    <span className="text-sm text-secondary-600">Escribe o pega cualquier emoji, o selecciona uno:</span>
-                    <p className="text-xs text-secondary-500 mt-0.5">
-                      Tip: En Mac presiona <kbd className="px-1.5 py-0.5 bg-secondary-100 rounded text-xs">⌘ Ctrl Espacio</kbd> para el selector de emojis
-                    </p>
-                  </div>
+                  <span className="text-sm text-secondary-600">Escribe o selecciona:</span>
                 </div>
-                <div className="max-h-48 overflow-y-auto border border-secondary-200 rounded-lg p-2 bg-secondary-50">
-                  <div className="flex flex-wrap gap-1">
+                <div className="max-h-32 overflow-y-auto border border-secondary-200 rounded-lg p-1.5 bg-secondary-50">
+                  <div className="flex flex-wrap gap-0.5">
                     {emojiPresets.map((emoji, idx) => (
                       <button
                         key={idx}
                         onClick={() => setFormData({ ...formData, icon: emoji })}
-                        className={`w-10 h-10 rounded-lg flex items-center justify-center text-xl hover:bg-white transition-colors ${
-                          formData.icon === emoji ? 'bg-primary-100 ring-2 ring-primary-500' : 'bg-white'
+                        className={`w-8 h-8 rounded flex items-center justify-center text-lg hover:bg-white transition-colors ${
+                          formData.icon === emoji ? 'bg-primary-100 ring-1 ring-primary-500' : 'bg-white'
                         }`}
                         title={emoji}
                       >
@@ -411,7 +406,7 @@ export default function CategoriesPage() {
             </div>
 
             {/* Actions */}
-            <div className="flex gap-3 mt-6 pt-6 border-t border-secondary-200">
+            <div className="flex gap-3 mt-4 pt-4 border-t border-secondary-200">
               <button
                 onClick={handleCloseModal}
                 className="flex-1 px-4 py-2 border border-secondary-300 text-secondary-700 rounded-lg hover:bg-secondary-50 transition-colors"
