@@ -22,6 +22,7 @@ export interface Database {
           total_amount: number | null
           parsed: boolean
           parsing_error: string | null
+          source_type: 'pdf' | 'manual' | null
           created_at: string
           updated_at: string
         }
@@ -37,6 +38,7 @@ export interface Database {
           total_amount?: number | null
           parsed?: boolean
           parsing_error?: string | null
+          source_type?: 'pdf' | 'manual' | null
           created_at?: string
           updated_at?: string
         }
@@ -52,6 +54,7 @@ export interface Database {
           total_amount?: number | null
           parsed?: boolean
           parsing_error?: string | null
+          source_type?: 'pdf' | 'manual' | null
           created_at?: string
           updated_at?: string
         }

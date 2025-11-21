@@ -37,17 +37,23 @@ export function useDialog() {
     setDialogState(prev => ({ ...prev, isOpen: false }))
   }, [])
 
-  const alert = useCallback((options: DialogOptions) => {
-    setDialogState({
-      isOpen: true,
-      title: options.title,
-      message: options.message,
-      type: options.type || 'info',
-      confirmText: options.confirmText || 'Aceptar',
-      cancelText: options.cancelText || 'Cancelar',
-      showCancel: false
+  const alert = useCallback((options: DialogOptions): Promise<void> => {
+    return new Promise((resolve) => {
+      setDialogState({
+        isOpen: true,
+        title: options.title,
+        message: options.message,
+        type: options.type || 'info',
+        confirmText: options.confirmText || 'Aceptar',
+        cancelText: options.cancelText || 'Cancelar',
+        onConfirm: () => {
+          closeDialog()
+          resolve()
+        },
+        showCancel: false
+      })
     })
-  }, [])
+  }, [closeDialog])
 
   const confirm = useCallback((options: ConfirmOptions) => {
     setDialogState({

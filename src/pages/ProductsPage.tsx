@@ -5,6 +5,8 @@ import categoryService from '../services/categoryService'
 import type { Database } from '../types/database'
 import { useAuthStore } from '../stores/authStore'
 import { useDialog } from '../hooks/useDialog'
+import CustomSelect from '../components/CustomSelect'
+import { notifyProductsUpdated } from '../hooks/useProductsCount'
 
 type Category = Database['public']['Tables']['categories']['Row']
 type ReviewStatus = 'pending' | 'uncategorized' | 'reviewed' | 'all'
@@ -64,6 +66,7 @@ export default function ProductsPage() {
         user?.id
       )
       await loadData()
+      notifyProductsUpdated() // Notificar actualización
       setShowEditModal(false)
       setEditingProduct(null)
     } catch (error) {
@@ -81,6 +84,7 @@ export default function ProductsPage() {
         category_id: newProduct.category_id || null,
       })
       await loadData()
+      notifyProductsUpdated() // Notificar actualización
       setShowCreateModal(false)
       setNewProduct({ name: '', alias: '', category_id: '' })
       alert({
@@ -178,24 +182,52 @@ export default function ProductsPage() {
         </div>
       </div>
 
-      {/* Stats Cards */}
+      {/* Stats Cards - Clickable Filters */}
       <div className="grid grid-cols-2 lg:grid-cols-4 gap-4 mb-6">
-        <div className="bg-white rounded-xl p-4 border border-secondary-200">
+        <button
+          onClick={() => setFilterStatus('all')}
+          className={`bg-white rounded-xl p-4 border transition-all text-left hover:shadow-md ${
+            filterStatus === 'all'
+              ? 'border-secondary-900 ring-2 ring-secondary-900'
+              : 'border-secondary-200 hover:border-secondary-400'
+          }`}
+        >
           <div className="text-2xl font-bold text-secondary-900">{stats.total}</div>
           <div className="text-sm text-secondary-600">Total productos</div>
-        </div>
-        <div className="bg-white rounded-xl p-4 border border-primary-200">
+        </button>
+        <button
+          onClick={() => setFilterStatus('reviewed')}
+          className={`bg-white rounded-xl p-4 border transition-all text-left hover:shadow-md ${
+            filterStatus === 'reviewed'
+              ? 'border-primary-600 ring-2 ring-primary-600'
+              : 'border-primary-200 hover:border-primary-400'
+          }`}
+        >
           <div className="text-2xl font-bold text-primary-600">{stats.reviewed}</div>
           <div className="text-sm text-secondary-600">Revisados</div>
-        </div>
-        <div className="bg-white rounded-xl p-4 border border-secondary-200">
+        </button>
+        <button
+          onClick={() => setFilterStatus('pending')}
+          className={`bg-white rounded-xl p-4 border transition-all text-left hover:shadow-md ${
+            filterStatus === 'pending'
+              ? 'border-secondary-600 ring-2 ring-secondary-600'
+              : 'border-secondary-200 hover:border-secondary-400'
+          }`}
+        >
           <div className="text-2xl font-bold text-secondary-600">{stats.pending}</div>
           <div className="text-sm text-secondary-600">Pendientes</div>
-        </div>
-        <div className="bg-white rounded-xl p-4 border border-red-200">
+        </button>
+        <button
+          onClick={() => setFilterStatus('uncategorized')}
+          className={`bg-white rounded-xl p-4 border transition-all text-left hover:shadow-md ${
+            filterStatus === 'uncategorized'
+              ? 'border-red-600 ring-2 ring-red-600'
+              : 'border-red-200 hover:border-red-400'
+          }`}
+        >
           <div className="text-2xl font-bold text-red-600">{stats.uncategorized}</div>
           <div className="text-sm text-secondary-600">Sin categoría</div>
-        </div>
+        </button>
       </div>
 
       {/* Filters */}
@@ -215,31 +247,20 @@ export default function ProductsPage() {
             </div>
           </div>
 
-          {/* Status Filter */}
-          <select
-            value={filterStatus}
-            onChange={(e) => setFilterStatus(e.target.value as ReviewStatus)}
-            className="px-4 py-2 border border-secondary-300 rounded-lg focus:ring-2 focus:ring-primary-500 focus:border-transparent"
-          >
-            <option value="all">Todos los estados</option>
-            <option value="reviewed">Revisados</option>
-            <option value="pending">Pendientes</option>
-            <option value="uncategorized">Sin categoría</option>
-          </select>
-
           {/* Category Filter */}
-          <select
+          <CustomSelect
+            options={[
+              { value: '', label: 'Todas las categorías' },
+              ...categories.map(cat => ({
+                value: cat.id,
+                label: `${cat.icon} ${cat.name}`
+              }))
+            ]}
             value={selectedCategory || ''}
-            onChange={(e) => setSelectedCategory(e.target.value || null)}
-            className="px-4 py-2 border border-secondary-300 rounded-lg focus:ring-2 focus:ring-primary-500 focus:border-transparent"
-          >
-            <option value="">Todas las categorías</option>
-            {categories.map(cat => (
-              <option key={cat.id} value={cat.id}>
-                {cat.icon} {cat.name}
-              </option>
-            ))}
-          </select>
+            onChange={(value) => setSelectedCategory(value || null)}
+            placeholder="Todas las categorías"
+            className="md:w-64"
+          />
         </div>
       </div>
 

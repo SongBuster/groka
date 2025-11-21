@@ -1,10 +1,13 @@
 import { Link, useLocation, Outlet } from 'react-router-dom'
 import { useAuthStore } from '../stores/authStore'
+import { useProductsCount } from '../hooks/useProductsCount'
+import SessionExpiredHandler from './SessionExpiredHandler'
 import { LogOut, Home, Receipt, Package, ShoppingCart } from 'lucide-react'
 
 export default function Layout() {
   const { user, signOut } = useAuthStore()
   const location = useLocation()
+  const { count: productsNeedingAttention } = useProductsCount()
 
   const handleSignOut = async () => {
     try {
@@ -44,11 +47,12 @@ export default function Layout() {
             <nav className="hidden md:flex items-center gap-1">
               {navigation.map((item) => {
                 const Icon = item.icon
+                const showBadge = item.path === '/products' && productsNeedingAttention > 0
                 return (
                   <Link
                     key={item.path}
                     to={item.path}
-                    className={`flex items-center gap-2 px-4 py-2 rounded-lg transition-colors font-medium ${
+                    className={`flex items-center gap-2 px-4 py-2 rounded-lg transition-colors font-medium relative ${
                       isActive(item.path)
                         ? 'bg-primary-100 text-primary-700'
                         : 'text-secondary-700 hover:bg-primary-50'
@@ -56,6 +60,11 @@ export default function Layout() {
                   >
                     <Icon className="w-5 h-5" />
                     <span>{item.name}</span>
+                    {showBadge && (
+                      <span className="absolute -top-1 -right-1 flex items-center justify-center min-w-[20px] h-5 px-1.5 bg-red-600 text-white text-xs font-bold rounded-full">
+                        {productsNeedingAttention}
+                      </span>
+                    )}
                   </Link>
                 )
               })}
@@ -83,11 +92,12 @@ export default function Layout() {
         <div className="grid grid-cols-4 gap-1 px-2 py-2">
           {navigation.map((item) => {
             const Icon = item.icon
+            const showBadge = item.path === '/products' && productsNeedingAttention > 0
             return (
               <Link
                 key={item.path}
                 to={item.path}
-                className={`flex flex-col items-center gap-1 px-3 py-2 rounded-lg transition-colors ${
+                className={`flex flex-col items-center gap-1 px-3 py-2 rounded-lg transition-colors relative ${
                   isActive(item.path)
                     ? 'bg-primary-100 text-primary-700'
                     : 'text-secondary-600 hover:bg-primary-50'
@@ -95,6 +105,11 @@ export default function Layout() {
               >
                 <Icon className="w-5 h-5" />
                 <span className="text-xs font-medium">{item.name}</span>
+                {showBadge && (
+                  <span className="absolute top-1 right-1 flex items-center justify-center min-w-[18px] h-[18px] px-1 bg-red-600 text-white text-[10px] font-bold rounded-full">
+                    {productsNeedingAttention}
+                  </span>
+                )}
               </Link>
             )
           })}
@@ -103,6 +118,9 @@ export default function Layout() {
 
       {/* Spacer for mobile navigation */}
       <div className="md:hidden h-20"></div>
+      
+      {/* Session expired handler */}
+      <SessionExpiredHandler />
     </div>
   )
 }

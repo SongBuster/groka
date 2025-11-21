@@ -10,7 +10,7 @@ import CategoriesPage from './pages/CategoriesPage'
 import ListsPage from './pages/ListsPage'
 import { Loader2 } from 'lucide-react'
 
-function App() {
+function AppContent() {
   const { user, loading, initialize } = useAuthStore()
 
   useEffect(() => {
@@ -42,17 +42,23 @@ function App() {
   }
 
   return (
+    <Routes>
+      <Route path="/" element={<Layout />}>
+        <Route index element={<Navigate to="/dashboard" replace />} />
+        <Route path="dashboard" element={<DashboardPage />} />
+        <Route path="tickets" element={<TicketsPage />} />
+        <Route path="products" element={<ProductsPage />} />
+        <Route path="categories" element={<CategoriesPage />} />
+        <Route path="lists" element={<ListsPage />} />
+      </Route>
+    </Routes>
+  )
+}
+
+function App() {
+  return (
     <BrowserRouter>
-      <Routes>
-        <Route path="/" element={<Layout />}>
-          <Route index element={<Navigate to="/dashboard" replace />} />
-          <Route path="dashboard" element={<DashboardPage />} />
-          <Route path="tickets" element={<TicketsPage />} />
-          <Route path="products" element={<ProductsPage />} />
-          <Route path="categories" element={<CategoriesPage />} />
-          <Route path="lists" element={<ListsPage />} />
-        </Route>
-      </Routes>
+      <AppContent />
     </BrowserRouter>
   )
 }

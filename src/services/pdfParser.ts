@@ -236,7 +236,7 @@ class PDFParser {
   /**
    * Extrae información del header
    */
-  extractHeader(fullText: string): TicketHeader {
+  async extractHeader(pdf: pdfjsLib.PDFDocumentProxy, fullText: string): Promise<TicketHeader> {
     const header: TicketHeader = {
       date: null,
       store: null,
@@ -255,10 +255,40 @@ class PDFParser {
       }
     }
 
-    // Tienda
-    const storeMatch = fullText.match(/MERCADONA,\s*S\.A\..*?\n(.*)\n(.*)/i)
-    if (storeMatch) {
-      header.store = `MERCADONA — ${storeMatch[1].trim()} — ${storeMatch[2].trim()}`
+    // Tienda - Extraer items estructurados de la primera página
+    try {
+      const page = await pdf.getPage(1)
+      const textContent = await page.getTextContent()
+      const items = textContent.items
+        .map((item: any) => item.str.trim())
+        .filter((s: string) => s)
+      
+      let storeName = 'Mercadona'
+      
+      // Buscar el NIF y tomar el siguiente item como dirección
+      for (let i = 0; i < items.length - 1; i++) {
+        if (items[i].match(/^[A-Z]-?\d{8}$/)) {
+          if (i + 1 < items.length) {
+            let street = items[i + 1].trim()
+            
+            // Limpiar formato común: quitar números de portal al final si están separados por coma
+            street = street.replace(/,\s*\d+\s*$/, '')
+            
+            // Limpiar espacios múltiples
+            street = street.replace(/\s+/g, ' ').trim()
+            
+            if (street && street.length > 3) {
+              storeName = `Mercadona ${street}`
+              break
+            }
+          }
+        }
+      }
+      
+      header.store = storeName
+    } catch (error) {
+      console.error('Error extrayendo tienda:', error)
+      header.store = 'Mercadona'
     }
 
     // Total
@@ -296,7 +326,7 @@ class PDFParser {
       console.log('📄 Texto completo (primeros 500 chars):', fullText.substring(0, 500))
 
       // Extraer header (fecha, tienda, total, factura)
-      const header = this.extractHeader(fullText)
+      const header = await this.extractHeader(pdf, fullText)
       console.log('📋 Header:', header)
 
       // Extraer filas con posiciones

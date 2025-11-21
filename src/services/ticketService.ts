@@ -1,5 +1,6 @@
 import { supabase } from '../lib/supabase'
 import pdfParser from './pdfParser'
+import { handleSupabaseError } from '../lib/sessionManager'
 import type { Database } from '../types/database'
 
 type Ticket = Database['public']['Tables']['tickets']['Row']
@@ -73,7 +74,8 @@ export class TicketService {
         purchase_date: purchaseDate,
         total_amount: totalAmount,
         parsed,
-        parsing_error: parsingError
+        parsing_error: parsingError,
+        source_type: 'pdf'
       }
 
       const { data: ticket, error: ticketError } = await supabase
@@ -145,13 +147,32 @@ export class TicketService {
           // Create new product
           const { data: newProduct, error } = await supabase
             .from('products')
-            .insert({ name: product.item_name, category: null } as any)
+            .insert({ 
+              name: product.item_name, 
+              alias: null,
+              category_id: null 
+            } as any)
             .select('id')
             .single() as { data: { id: string } | null, error: any }
 
           if (error) {
-            console.error('Error creating product:', error)
-            productIds.push(null)
+            // Si es error de duplicado (23505), buscar el producto que ya existe
+            if (error.code === '23505') {
+              const { data: duplicate } = await supabase
+                .from('products')
+                .select('id')
+                .eq('name', product.item_name)
+                .maybeSingle() as { data: { id: string } | null }
+              
+              if (duplicate) {
+                productIds.push(duplicate.id)
+              } else {
+                productIds.push(null)
+              }
+            } else {
+              console.error('Error creating product:', error)
+              productIds.push(null)
+            }
           } else if (newProduct) {
             productIds.push(newProduct.id)
           } else {
@@ -178,7 +199,10 @@ export class TicketService {
       .order('purchase_date', { ascending: false, nullsFirst: false })
       .order('created_at', { ascending: false })
 
-    if (error) throw error
+    if (error) {
+      handleSupabaseError(error)
+      throw error
+    }
     return data || []
   }
 
@@ -195,7 +219,10 @@ export class TicketService {
       .eq('id', ticketId)
       .single()
 
-    if (ticketError) throw ticketError
+    if (ticketError) {
+      handleSupabaseError(ticketError)
+      throw ticketError
+    }
 
     const { data: items, error: itemsError } = await supabase
       .from('ticket_items')
@@ -241,7 +268,8 @@ export class TicketService {
         purchase_date: purchaseTimestamp,
         total_amount: totalAmount,
         parsed: true, // Manual tickets are already "parsed"
-        parsing_error: null
+        parsing_error: null,
+        source_type: 'manual'
       }
 
       const { data: ticket, error: ticketError } = await supabase
@@ -313,6 +341,17 @@ export class TicketService {
    */
   private async createProductFromTicket(productName: string): Promise<string> {
     try {
+      // Primero verificar si ya existe
+      const { data: existing } = await supabase
+        .from('products')
+        .select('id')
+        .eq('name', productName)
+        .maybeSingle() as { data: { id: string } | null }
+
+      if (existing) {
+        return existing.id
+      }
+
       // Create product directly (will auto-categorize based on keywords via trigger)
       const { data: newProduct, error } = await supabase
         .from('products')
@@ -325,6 +364,18 @@ export class TicketService {
         .single() as { data: { id: string } | null, error: any }
 
       if (error) {
+        // Si es error de duplicado, buscar el producto
+        if (error.code === '23505') {
+          const { data: duplicate } = await supabase
+            .from('products')
+            .select('id')
+            .eq('name', productName)
+            .maybeSingle() as { data: { id: string } | null }
+          
+          if (duplicate) {
+            return duplicate.id
+          }
+        }
         console.error('Error creating product:', error)
         throw error
       }
@@ -366,14 +417,14 @@ export class TicketService {
 
       // Update ticket record
       const { error: ticketError } = await (supabase
-        .from('tickets')
+        .from('tickets') as any)
         .update({
           store_name: storeName,
           ticket_number: ticketNumber,
           purchase_date: purchaseTimestamp,
           total_amount: totalAmount,
           updated_at: new Date().toISOString()
-        }) as any)
+        })
         .eq('id', ticketId)
 
       if (ticketError) throw ticketError
@@ -393,6 +444,27 @@ export class TicketService {
     } catch (error) {
       console.error('Error updating ticket:', error)
       throw error
+    }
+  }
+
+  /**
+   * Get the last price and quantity info for a product
+   */
+  async getLastProductInfo(productId: string): Promise<{ unitPrice: number; quantity: number } | null> {
+    try {
+      const { data, error } = await supabase
+        .from('ticket_items')
+        .select('unit_price, quantity')
+        .eq('product_id', productId)
+        .order('created_at', { ascending: false })
+        .limit(1)
+        .maybeSingle() as { data: { unit_price: number; quantity: number } | null, error: any }
+
+      if (error) throw error
+      return data ? { unitPrice: data.unit_price, quantity: data.quantity } : null
+    } catch (error) {
+      console.error('Error getting last product info:', error)
+      return null
     }
   }
 
