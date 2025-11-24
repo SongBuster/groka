@@ -2,12 +2,15 @@ import { useState, useEffect, useMemo } from 'react'
 import { useAuthStore } from '../stores/authStore'
 import { Loader2, Receipt, Plus, Trash2, Save, X, Edit2, Filter, ChevronDown } from 'lucide-react'
 import ticketService from '../services/ticketService'
+import supermarketService from '../services/supermarketService'
 import { formatCurrency, formatDateTime } from '../lib/formatters'
 import { useDialog } from '../hooks/useDialog'
 import CustomSelect from '../components/CustomSelect'
 import { notifyProductsUpdated } from '../hooks/useProductsCount'
 import { handleSupabaseError } from '../lib/sessionManager'
 import type { Database } from '../types/database'
+
+type Supermarket = Database['public']['Tables']['supermarkets']['Row']
 
 type Ticket = Database['public']['Tables']['tickets']['Row']
 
@@ -26,11 +29,13 @@ export default function TicketsPage() {
   const { user } = useAuthStore()
   const { alert, confirm, DialogComponent } = useDialog()
   const [tickets, setTickets] = useState<Ticket[]>([])
+  const [supermarkets, setSupermarkets] = useState<Supermarket[]>([])
   const [loadingTickets, setLoadingTickets] = useState(false)
   const [showManualModal, setShowManualModal] = useState(false)
   const [editingTicket, setEditingTicket] = useState<Ticket | null>(null)
   const [manualTicket, setManualTicket] = useState({
     storeName: '',
+    supermarketId: '',
     ticketNumber: '',
     purchaseDate: new Date().toISOString().slice(0, 16), // formato: YYYY-MM-DDTHH:mm
     products: [] as ManualProduct[]
@@ -46,6 +51,7 @@ export default function TicketsPage() {
   const [showFilters, setShowFilters] = useState(false)
   const [filterPeriod, setFilterPeriod] = useState<string>('last-month')
   const [filterStore, setFilterStore] = useState<string>('')
+  const [filterSupermarket, setFilterSupermarket] = useState<string>('')
   const [filterMinAmount, setFilterMinAmount] = useState<string>('')
   const [filterMaxAmount, setFilterMaxAmount] = useState<string>('')
   const [customStartDate, setCustomStartDate] = useState<string>('')
@@ -54,6 +60,7 @@ export default function TicketsPage() {
   useEffect(() => {
     if (user) {
       loadTickets()
+      loadSupermarkets()
     }
   }, [user])
 
@@ -85,6 +92,15 @@ export default function TicketsPage() {
       handleSupabaseError(error)
     } finally {
       setLoadingTickets(false)
+    }
+  }
+
+  const loadSupermarkets = async () => {
+    try {
+      const data = await supermarketService.getAll()
+      setSupermarkets(data)
+    } catch (error) {
+      console.error('Error loading supermarkets:', error)
     }
   }
 
@@ -143,12 +159,15 @@ export default function TicketsPage() {
 
     // Filtro por tienda
     if (filterStore) {
-      filtered = filtered.filter(ticket => 
+      filtered = filtered.filter(ticket =>
         ticket.store_name?.toLowerCase().includes(filterStore.toLowerCase())
       )
     }
 
-    // Filtro por importe mínimo
+    // Filtro por supermercado
+    if (filterSupermarket) {
+      filtered = filtered.filter(ticket => ticket.supermarket_id === filterSupermarket)
+    }    // Filtro por importe mínimo
     if (filterMinAmount) {
       const minAmount = parseFloat(filterMinAmount)
       if (!isNaN(minAmount)) {
@@ -170,7 +189,7 @@ export default function TicketsPage() {
       const dateB = b.purchase_date ? new Date(b.purchase_date).getTime() : 0
       return dateB - dateA
     })
-  }, [tickets, filterPeriod, filterStore, filterMinAmount, filterMaxAmount, customStartDate, customEndDate])
+  }, [tickets, filterPeriod, filterStore, filterSupermarket, filterMinAmount, filterMaxAmount, customStartDate, customEndDate])
 
   // Obtener lista única de tiendas
   const availableStores = useMemo(() => {
@@ -290,6 +309,15 @@ export default function TicketsPage() {
     if (!user) return
     
     // Validaciones
+    if (!manualTicket.supermarketId) {
+      alert({
+        title: 'Campo requerido',
+        message: 'Por favor, selecciona un supermercado',
+        type: 'warning'
+      })
+      return
+    }
+
     if (!manualTicket.storeName.trim()) {
       alert({
         title: 'Campo requerido',
@@ -325,6 +353,7 @@ export default function TicketsPage() {
         // Editar ticket existente
         await ticketService.updateTicket(
           editingTicket.id,
+          manualTicket.supermarketId,
           manualTicket.storeName,
           manualTicket.purchaseDate,
           manualTicket.ticketNumber || null,
@@ -345,6 +374,7 @@ export default function TicketsPage() {
         // Actualizar con los datos editados/revisados por el usuario
         await ticketService.updateTicket(
           createdTicket.id,
+          manualTicket.supermarketId,
           manualTicket.storeName,
           manualTicket.purchaseDate,
           manualTicket.ticketNumber || null,
@@ -361,6 +391,7 @@ export default function TicketsPage() {
         // Crear ticket manual (sin PDF)
         await ticketService.createManualTicket(
           user.id,
+          manualTicket.supermarketId,
           manualTicket.storeName,
           manualTicket.purchaseDate,
           manualTicket.ticketNumber || null,
@@ -433,6 +464,7 @@ export default function TicketsPage() {
       setEditingTicket(ticket)
       setManualTicket({
         storeName: ticket.store_name || '',
+        supermarketId: ticket.supermarket_id || '',
         ticketNumber: ticket.ticket_number || '',
         purchaseDate,
         products
@@ -487,6 +519,7 @@ export default function TicketsPage() {
     setPdfFile(null) // Limpiar el archivo PDF
     setManualTicket({
       storeName: '',
+      supermarketId: '',
       ticketNumber: '',
       purchaseDate: new Date().toISOString().slice(0, 16),
       products: []
@@ -605,6 +638,7 @@ export default function TicketsPage() {
         // Llenar el formulario con los datos parseados
         setManualTicket({
           storeName: parsedData.store || '',
+          supermarketId: parsedData.supermarketId || '',
           ticketNumber: parsedData.invoiceNumber || '',
           purchaseDate: purchaseDateTime,
           products: products
@@ -741,7 +775,7 @@ export default function TicketsPage() {
 
         {showFilters && (
           <div className="space-y-4">
-            <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
+            <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-5 gap-4">
           {/* Período */}
           <div>
             <label className="block text-sm font-medium text-secondary-700 mb-1">
@@ -762,6 +796,25 @@ export default function TicketsPage() {
             />
           </div>
 
+          {/* Supermercado */}
+          <div>
+            <label className="block text-sm font-medium text-secondary-700 mb-1">
+              Supermercado
+            </label>
+            <CustomSelect
+              options={[
+                { value: '', label: 'Todos' },
+                ...supermarkets.map(sm => ({
+                  value: sm.id,
+                  label: sm.name
+                }))
+              ]}
+              value={filterSupermarket}
+              onChange={setFilterSupermarket}
+              placeholder="Todos"
+            />
+          </div>
+
           {/* Tienda */}
           <div>
             <label className="block text-sm font-medium text-secondary-700 mb-1">
@@ -769,7 +822,7 @@ export default function TicketsPage() {
             </label>
             <CustomSelect
               options={[
-                { value: '', label: 'Todas las tiendas' },
+                { value: '', label: 'Todas' },
                 ...availableStores.map(store => ({
                   value: store,
                   label: store
@@ -777,7 +830,7 @@ export default function TicketsPage() {
               ]}
               value={filterStore}
               onChange={setFilterStore}
-              placeholder="Todas las tiendas"
+              placeholder="Todas"
             />
           </div>
 
@@ -912,6 +965,22 @@ export default function TicketsPage() {
                 <div className="flex flex-col gap-3">
                   <div className="flex justify-between items-start">
                     <div className="flex-1 min-w-0">
+                      {ticket.supermarket_id && (() => {
+                        const supermarket = supermarkets.find(sm => sm.id === ticket.supermarket_id)
+                        return supermarket && (
+                          <div className="flex items-center gap-2 mb-1">
+                            <span 
+                              className="inline-flex items-center px-2 py-0.5 rounded text-xs font-semibold"
+                              style={{
+                                backgroundColor: supermarket.color ? `${supermarket.color}15` : '#f3f4f6',
+                                color: supermarket.color || '#374151'
+                              }}
+                            >
+                              {supermarket.name}
+                            </span>
+                          </div>
+                        )
+                      })()}
                       <h3 className="font-semibold text-secondary-900 text-base sm:text-lg truncate group-hover:text-primary-600 transition-colors">
                         {ticket.store_name || 'Tienda desconocida'}
                       </h3>
@@ -1009,6 +1078,25 @@ export default function TicketsPage() {
             </div>
 
             <div className="space-y-6">
+              {/* Supermarket Selection */}
+              <div>
+                <label className="block text-sm font-medium text-secondary-700 mb-1">
+                  Supermercado *
+                </label>
+                <CustomSelect
+                  options={[
+                    { value: '', label: 'Selecciona un supermercado' },
+                    ...supermarkets.map(sm => ({
+                      value: sm.id,
+                      label: sm.name
+                    }))
+                  ]}
+                  value={manualTicket.supermarketId}
+                  onChange={(value) => setManualTicket({ ...manualTicket, supermarketId: value })}
+                  placeholder="Selecciona un supermercado"
+                />
+              </div>
+
               {/* Store and Date Info */}
               <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
                 <div className="relative">

@@ -1,5 +1,6 @@
 import * as pdfjsLib from 'pdfjs-dist'
 import { convertToISODate } from '../lib/formatters'
+import supermarketService from './supermarketService'
 
 // Configure PDF.js worker
 pdfjsLib.GlobalWorkerOptions.workerSrc = new URL(
@@ -24,6 +25,8 @@ interface TicketHeader {
   store: string | null
   total: number | null
   invoiceNumber: string | null
+  supermarketId: string | null
+  supermarketName: string | null
 }
 
 interface Row {
@@ -44,6 +47,8 @@ interface ParsedTicket {
   date: string | null
   time: string
   store: string | null
+  supermarketId: string | null
+  supermarketName: string | null
   products: Array<{
     item_name: string
     quantity: number
@@ -241,7 +246,20 @@ class PDFParser {
       date: null,
       store: null,
       total: null,
-      invoiceNumber: null
+      invoiceNumber: null,
+      supermarketId: null,
+      supermarketName: null
+    }
+
+    // Detectar supermercado automáticamente por NIF o nombre
+    try {
+      const detectedSupermarket = await supermarketService.detectFromText(fullText)
+      if (detectedSupermarket) {
+        header.supermarketId = detectedSupermarket.id
+        header.supermarketName = detectedSupermarket.name
+      }
+    } catch (error) {
+      console.error('Error detectando supermercado:', error)
     }
 
     // Fecha/hora
@@ -263,7 +281,9 @@ class PDFParser {
         .map((item: any) => item.str.trim())
         .filter((s: string) => s)
       
-      let storeName = 'Mercadona'
+      // Usar el nombre del supermercado detectado o usar el nombre de la cadena por defecto
+      const supermarketBaseName = header.supermarketName || 'Mercadona'
+      let storeName = supermarketBaseName
       
       // Buscar el NIF y tomar el siguiente item como dirección
       for (let i = 0; i < items.length - 1; i++) {
@@ -278,7 +298,7 @@ class PDFParser {
             street = street.replace(/\s+/g, ' ').trim()
             
             if (street && street.length > 3) {
-              storeName = `Mercadona ${street}`
+              storeName = `${supermarketBaseName} ${street}`
               break
             }
           }
@@ -288,7 +308,7 @@ class PDFParser {
       header.store = storeName
     } catch (error) {
       console.error('Error extrayendo tienda:', error)
-      header.store = 'Mercadona'
+      header.store = header.supermarketName || 'Mercadona'
     }
 
     // Total
@@ -362,6 +382,8 @@ class PDFParser {
         date: fecha,
         time: hora,
         store: header.store,
+        supermarketId: header.supermarketId,
+        supermarketName: header.supermarketName,
         products: items.map(item => ({
           item_name: item.item_name,
           quantity: item.cantidad,

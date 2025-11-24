@@ -70,6 +70,17 @@ export default function Layout() {
               })}
             </nav>
 
+            {/* Dev Tools */}
+            {import.meta.env.DEV && (
+              <Link
+                to="/parser-trainer"
+                className="flex items-center gap-2 px-3 sm:px-4 py-2 text-secondary-500 hover:text-primary-600 hover:bg-primary-50 rounded-lg transition-colors text-sm"
+                title="Parser Trainer (Dev)"
+              >
+                🔬
+              </Link>
+            )}
+
             {/* Sign Out Button */}
             <button
               onClick={handleSignOut}

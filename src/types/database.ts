@@ -9,10 +9,40 @@ export type Json =
 export interface Database {
   public: {
     Tables: {
+      supermarkets: {
+        Row: {
+          id: string
+          name: string
+          nif: string | null
+          logo_url: string | null
+          color: string | null
+          created_at: string
+          updated_at: string
+        }
+        Insert: {
+          id?: string
+          name: string
+          nif?: string | null
+          logo_url?: string | null
+          color?: string | null
+          created_at?: string
+          updated_at?: string
+        }
+        Update: {
+          id?: string
+          name?: string
+          nif?: string | null
+          logo_url?: string | null
+          color?: string | null
+          created_at?: string
+          updated_at?: string
+        }
+      }
       tickets: {
         Row: {
           id: string
           user_id: string
+          supermarket_id: string | null
           file_name: string
           file_url: string | null
           upload_date: string
@@ -29,6 +59,7 @@ export interface Database {
         Insert: {
           id?: string
           user_id: string
+          supermarket_id?: string | null
           file_name: string
           file_url?: string | null
           upload_date?: string
@@ -45,6 +76,7 @@ export interface Database {
         Update: {
           id?: string
           user_id?: string
+          supermarket_id?: string | null
           file_name?: string
           file_url?: string | null
           upload_date?: string
@@ -57,6 +89,32 @@ export interface Database {
           source_type?: 'pdf' | 'manual' | null
           created_at?: string
           updated_at?: string
+        }
+      }
+      product_supermarkets: {
+        Row: {
+          id: string
+          product_id: string
+          supermarket_id: string
+          last_price: number | null
+          last_seen_at: string
+          created_at: string
+        }
+        Insert: {
+          id?: string
+          product_id: string
+          supermarket_id: string
+          last_price?: number | null
+          last_seen_at?: string
+          created_at?: string
+        }
+        Update: {
+          id?: string
+          product_id?: string
+          supermarket_id?: string
+          last_price?: number | null
+          last_seen_at?: string
+          created_at?: string
         }
       }
       categories: {

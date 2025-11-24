@@ -49,6 +49,7 @@ export class TicketService {
       let storeName: string | null = null
       let purchaseDate: string | null = null
       let totalAmount: number | null = null
+      let supermarketId: string | null = null
       let products: any[] = []
 
       try {
@@ -58,6 +59,7 @@ export class TicketService {
         storeName = parsedData.store
         purchaseDate = parsedData.date
         totalAmount = parsedData.totalFromPDF || parsedData.totalAmount
+        supermarketId = parsedData.supermarketId
         products = parsedData.products
       } catch (error: any) {
         parsingError = error.message || 'Error parsing PDF'
@@ -67,6 +69,7 @@ export class TicketService {
       // 3. Insert ticket record
       const ticketData: TicketInsert = {
         user_id: userId,
+        supermarket_id: supermarketId,
         file_name: file.name,
         file_url: publicUrl,
         ticket_number: ticketNumber,
@@ -89,7 +92,7 @@ export class TicketService {
 
       // 4. Insert ticket items if parsing was successful
       if (parsed && products.length > 0) {
-        await this.saveTicketItems(ticket.id, products)
+        await this.saveTicketItems(ticket.id, products, supermarketId, purchaseDate)
       }
 
       return ticket
@@ -102,7 +105,7 @@ export class TicketService {
   /**
    * Save parsed products as ticket items
    */
-  private async saveTicketItems(ticketId: string, products: any[]): Promise<void> {
+  private async saveTicketItems(ticketId: string, products: any[], supermarketId: string | null, purchaseDate: string | null): Promise<void> {
     try {
       // First, ensure products exist in the catalog
       const productIds = await this.ensureProductsExist(products)
@@ -119,9 +122,49 @@ export class TicketService {
 
       const { error } = await supabase.from('ticket_items').insert(items as any)
       if (error) throw error
+
+      // Update product-supermarket associations if supermarket is known
+      if (supermarketId && purchaseDate) {
+        await this.updateProductSupermarketAssociations(productIds, products, supermarketId, purchaseDate)
+      }
     } catch (error) {
       console.error('Error saving ticket items:', error)
       throw error
+    }
+  }
+
+  /**
+   * Update product-supermarket associations with last price and last seen date
+   */
+  private async updateProductSupermarketAssociations(
+    productIds: (string | null)[],
+    products: any[],
+    supermarketId: string,
+    purchaseDate: string
+  ): Promise<void> {
+    for (let i = 0; i < productIds.length; i++) {
+      const productId = productIds[i]
+      if (!productId) continue
+
+      const product = products[i]
+      const lastPrice = product.unit_price || product.total
+
+      try {
+        // Upsert: insert or update if exists
+        await supabase
+          .from('product_supermarkets')
+          .upsert({
+            product_id: productId,
+            supermarket_id: supermarketId,
+            last_price: lastPrice,
+            last_seen_at: purchaseDate
+          } as any, {
+            onConflict: 'product_id,supermarket_id'
+          })
+      } catch (error) {
+        console.error('Error updating product-supermarket association:', error)
+        // Don't throw, continue with other products
+      }
     }
   }
 
@@ -239,6 +282,7 @@ export class TicketService {
    */
   async createManualTicket(
     userId: string,
+    supermarketId: string,
     storeName: string,
     purchaseDate: string,
     ticketNumber: string | null,
@@ -261,6 +305,7 @@ export class TicketService {
       // Create ticket record
       const ticketData: TicketInsert = {
         user_id: userId,
+        supermarket_id: supermarketId || null,
         file_name: 'Manual',
         file_url: null,
         ticket_number: ticketNumber,
@@ -283,7 +328,7 @@ export class TicketService {
 
       // Process products and save ticket items
       if (products.length > 0) {
-        await this.saveManualTicketItems(ticket.id, products)
+        await this.saveManualTicketItems(ticket.id, products, supermarketId, purchaseTimestamp)
       }
 
       return ticket
@@ -305,10 +350,13 @@ export class TicketService {
       quantity: number
       unit_price: number
       total: number
-    }>
+    }>,
+    supermarketId: string | null = null,
+    purchaseDate: string | null = null
   ): Promise<void> {
     try {
       const items = []
+      const productIds: string[] = []
 
       for (const product of products) {
         let productId = product.product_id
@@ -317,6 +365,8 @@ export class TicketService {
         if (!productId) {
           productId = await this.createProductFromTicket(product.name)
         }
+
+        productIds.push(productId)
 
         items.push({
           ticket_id: ticketId,
@@ -330,6 +380,30 @@ export class TicketService {
 
       const { error } = await supabase.from('ticket_items').insert(items as any)
       if (error) throw error
+
+      // Update product-supermarket associations if supermarket is known
+      if (supermarketId && purchaseDate) {
+        for (let i = 0; i < productIds.length; i++) {
+          const productId = productIds[i]
+          const product = products[i]
+          
+          try {
+            await supabase
+              .from('product_supermarkets')
+              .upsert({
+                product_id: productId,
+                supermarket_id: supermarketId,
+                last_price: product.unit_price,
+                last_seen_at: purchaseDate
+              } as any, {
+                onConflict: 'product_id,supermarket_id'
+              })
+          } catch (error) {
+            console.error('Error updating product-supermarket association:', error)
+            // Don't throw, continue with other products
+          }
+        }
+      }
     } catch (error) {
       console.error('Error saving manual ticket items:', error)
       throw error
@@ -396,6 +470,7 @@ export class TicketService {
    */
   async updateTicket(
     ticketId: string,
+    supermarketId: string,
     storeName: string,
     purchaseDate: string,
     ticketNumber: string | null,
@@ -419,6 +494,7 @@ export class TicketService {
       const { error: ticketError } = await (supabase
         .from('tickets') as any)
         .update({
+          supermarket_id: supermarketId || null,
           store_name: storeName,
           ticket_number: ticketNumber,
           purchase_date: purchaseTimestamp,
@@ -439,7 +515,7 @@ export class TicketService {
 
       // Insert new items
       if (products.length > 0) {
-        await this.saveManualTicketItems(ticketId, products)
+        await this.saveManualTicketItems(ticketId, products, supermarketId, purchaseTimestamp)
       }
     } catch (error) {
       console.error('Error updating ticket:', error)
