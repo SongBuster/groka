@@ -1,0 +1,5 @@
+#!/bin/sh
+# Pre-push hook: bump minor version and commit before pushing
+# This script is installed into .git/hooks/pre-push by the installer below.
+node ./tools/version.js minor --commit || true
+exit 0

@@ -8,7 +8,10 @@
     "dev": "vite",
     "build": "tsc -b && vite build",
     "lint": "eslint .",
-    "preview": "vite preview"
+    "preview": "vite preview",
+    "version:bump-minor": "node ./tools/version.js minor --commit",
+    "version:bump-patch": "node ./tools/version.js patch --commit",
+    "install-git-hooks": "sh ./scripts/install-git-hooks.sh"
   },
   "dependencies": {
     "@supabase/supabase-js": "^2.83.0",
