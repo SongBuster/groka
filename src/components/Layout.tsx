@@ -2,6 +2,7 @@ import { Link, useLocation, Outlet } from 'react-router-dom'
 import { useAuthStore } from '../stores/authStore'
 import { useProductsCount } from '../hooks/useProductsCount'
 import SessionExpiredHandler from './SessionExpiredHandler'
+import VersionBadge from './VersionBadge'
 import { LogOut, Home, Receipt, Package, ShoppingCart } from 'lucide-react'
 
 export default function Layout() {
@@ -132,6 +133,7 @@ export default function Layout() {
       
       {/* Session expired handler */}
       <SessionExpiredHandler />
+      <VersionBadge />
     </div>
   )
 }
