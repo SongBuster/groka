@@ -2,8 +2,8 @@ import { Link, useLocation, Outlet } from 'react-router-dom'
 import { useAuthStore } from '../stores/authStore'
 import { useProductsCount } from '../hooks/useProductsCount'
 import SessionExpiredHandler from './SessionExpiredHandler'
-import VersionBadge from './VersionBadge'
 import { LogOut, Home, Receipt, Package, ShoppingCart } from 'lucide-react'
+import { VERSION_INFO } from '../version'
 
 export default function Layout() {
   const { user, signOut } = useAuthStore()
@@ -40,7 +40,15 @@ export default function Layout() {
               </div>
               <div>
                 <h1 className="text-lg sm:text-xl font-bold text-primary-700">Groka</h1>
-                <p className="text-xs text-secondary-600 truncate max-w-[150px] sm:max-w-none">{user?.email}</p>
+                <div className="flex items-center gap-2">
+                  <p className="text-xs text-secondary-600 truncate max-w-[150px] sm:max-w-none">{user?.email}</p>
+                  <span
+                    title={`Version ${VERSION_INFO.version}`}
+                    className="text-[10px] text-secondary-500 bg-white/60 border border-primary-100 px-2 py-0.5 rounded-full shadow-sm hidden sm:inline"
+                  >
+                    {VERSION_INFO.version}
+                  </span>
+                </div>
               </div>
             </Link>
 
@@ -133,7 +141,6 @@ export default function Layout() {
       
       {/* Session expired handler */}
       <SessionExpiredHandler />
-      <VersionBadge />
     </div>
   )
 }

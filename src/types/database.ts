@@ -220,6 +220,7 @@ export interface Database {
         Row: {
           id: string
           owner_id: string
+          supermarket_id: string | null
           name: string
           description: string | null
           is_active: boolean
@@ -230,6 +231,7 @@ export interface Database {
         Insert: {
           id?: string
           owner_id: string
+          supermarket_id?: string | null
           name?: string
           description?: string | null
           is_active?: boolean
@@ -240,6 +242,7 @@ export interface Database {
         Update: {
           id?: string
           owner_id?: string
+          supermarket_id?: string | null
           name?: string
           description?: string | null
           is_active?: boolean

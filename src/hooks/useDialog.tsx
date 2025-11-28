@@ -1,4 +1,4 @@
-import { useState, useCallback } from 'react'
+import { useState, useCallback, useRef } from 'react'
 import { Dialog } from '../components/Dialog'
 
 interface DialogOptions {
@@ -9,10 +9,6 @@ interface DialogOptions {
   cancelText?: string
 }
 
-interface ConfirmOptions extends DialogOptions {
-  onConfirm: () => void | Promise<void>
-}
-
 export function useDialog() {
   const [dialogState, setDialogState] = useState<{
     isOpen: boolean
@@ -21,7 +17,6 @@ export function useDialog() {
     type: 'info' | 'success' | 'warning' | 'error'
     confirmText: string
     cancelText: string
-    onConfirm?: () => void | Promise<void>
     showCancel: boolean
   }>({
     isOpen: false,
@@ -33,8 +28,23 @@ export function useDialog() {
     showCancel: false
   })
 
+  const resolverRef = useRef<((value: boolean) => void) | null>(null)
+
   const closeDialog = useCallback(() => {
     setDialogState(prev => ({ ...prev, isOpen: false }))
+    // If it's a confirm dialog and user closes without confirming, resolve with false
+    if (resolverRef.current) {
+      resolverRef.current(false)
+      resolverRef.current = null
+    }
+  }, [])
+
+  const handleConfirm = useCallback(() => {
+    setDialogState(prev => ({ ...prev, isOpen: false }))
+    if (resolverRef.current) {
+      resolverRef.current(true)
+      resolverRef.current = null
+    }
   }, [])
 
   const alert = useCallback((options: DialogOptions): Promise<void> => {
@@ -46,25 +56,26 @@ export function useDialog() {
         type: options.type || 'info',
         confirmText: options.confirmText || 'Aceptar',
         cancelText: options.cancelText || 'Cancelar',
-        onConfirm: () => {
-          closeDialog()
-          resolve()
-        },
         showCancel: false
       })
+      resolverRef.current = () => {
+        resolve()
+      }
     })
-  }, [closeDialog])
+  }, [])
 
-  const confirm = useCallback((options: ConfirmOptions) => {
-    setDialogState({
-      isOpen: true,
-      title: options.title,
-      message: options.message,
-      type: options.type || 'warning',
-      confirmText: options.confirmText || 'Confirmar',
-      cancelText: options.cancelText || 'Cancelar',
-      onConfirm: options.onConfirm,
-      showCancel: true
+  const confirm = useCallback((options: DialogOptions): Promise<boolean> => {
+    return new Promise((resolve) => {
+      setDialogState({
+        isOpen: true,
+        title: options.title,
+        message: options.message,
+        type: options.type || 'warning',
+        confirmText: options.confirmText || 'Confirmar',
+        cancelText: options.cancelText || 'Cancelar',
+        showCancel: true
+      })
+      resolverRef.current = resolve
     })
   }, [])
 
@@ -77,10 +88,10 @@ export function useDialog() {
       type={dialogState.type}
       confirmText={dialogState.confirmText}
       cancelText={dialogState.cancelText}
-      onConfirm={dialogState.onConfirm}
+      onConfirm={handleConfirm}
       showCancel={dialogState.showCancel}
     />
-  ), [dialogState, closeDialog])
+  ), [dialogState, closeDialog, handleConfirm])
 
   return {
     alert,
