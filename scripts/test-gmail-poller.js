@@ -10,7 +10,7 @@
  *   node scripts/test-gmail-poller.js https://groka.vercel.app
  */
 
-const baseUrl = process.argv[2] || 'http://localhost:3000'
+const baseUrl = process.argv[2] || 'http://localhost:5173'
 const secret = process.env.GMAIL_POLLER_SECRET
 
 if (!secret) {

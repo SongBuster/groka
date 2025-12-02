@@ -70,11 +70,12 @@ class ProductService {
 
     if (error) throw error
 
+    const rows = (data as any[]) || []
     const stats: ProductStats = {
-      total: data.length,
-      pending: data.filter(p => p.review_status === 'pending').length,
-      uncategorized: data.filter(p => p.review_status === 'uncategorized').length,
-      reviewed: data.filter(p => p.review_status === 'reviewed').length,
+      total: rows.length,
+      pending: rows.filter(p => p.review_status === 'pending').length,
+      uncategorized: rows.filter(p => p.review_status === 'uncategorized').length,
+      reviewed: rows.filter(p => p.review_status === 'reviewed').length,
     }
 
     return stats
@@ -112,7 +113,7 @@ class ProductService {
   async create(product: ProductInsert): Promise<Product> {
     const { data, error } = await supabase
       .from('products')
-      .insert(product)
+      .insert(product as any)
       .select()
       .single()
 
@@ -134,9 +135,9 @@ class ProductService {
       }
     }
 
-    const { data, error } = await supabase
+    const { data, error } = await (supabase as any)
       .from('products')
-      .update(updateData)
+      .update(updateData as any)
       .eq('id', id)
       .select()
       .single()
@@ -155,14 +156,14 @@ class ProductService {
   }
 
   async bulkUpdateCategory(productIds: string[], categoryId: string, userId?: string): Promise<void> {
-    const { error } = await supabase
+    const { error } = await (supabase as any)
       .from('products')
       .update({
         category_id: categoryId,
         review_status: 'reviewed',
         last_reviewed_at: new Date().toISOString(),
         last_reviewed_by: userId,
-      })
+      } as any)
       .in('id', productIds)
 
     if (error) throw error

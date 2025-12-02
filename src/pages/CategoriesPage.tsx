@@ -124,32 +124,33 @@ export default function CategoriesPage() {
     }
   }
 
-  const handleDelete = (id: string, name: string) => {
-    confirm({
+  const handleDelete = async (id: string, name: string) => {
+    const confirmed = await confirm({
       title: 'Eliminar categoría',
       message: `¿Estás seguro de eliminar la categoría "${name}"?\n\nEsta acción no se puede deshacer.`,
       type: 'error',
       confirmText: 'Eliminar',
-      cancelText: 'Cancelar',
-      onConfirm: async () => {
-        try {
-          await categoryService.delete(id)
-          await loadCategories()
-          alert({
-            title: 'Categoría eliminada',
-            message: 'La categoría se ha eliminado correctamente',
-            type: 'success'
-          })
-        } catch (error) {
-          console.error('Error deleting category:', error)
-          alert({
-            title: 'Error',
-            message: 'No se pudo eliminar la categoría. Puede que tenga productos asociados.',
-            type: 'error'
-          })
-        }
-      }
+      cancelText: 'Cancelar'
     })
+
+    if (!confirmed) return
+
+    try {
+      await categoryService.delete(id)
+      await loadCategories()
+      await alert({
+        title: 'Categoría eliminada',
+        message: 'La categoría se ha eliminado correctamente',
+        type: 'success'
+      })
+    } catch (error) {
+      console.error('Error deleting category:', error)
+      await alert({
+        title: 'Error',
+        message: 'No se pudo eliminar la categoría. Puede que tenga productos asociados.',
+        type: 'error'
+      })
+    }
   }
 
   const emojiPresets = [

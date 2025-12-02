@@ -30,7 +30,7 @@ class CategoryService {
   async create(category: CategoryInsert): Promise<Category> {
     const { data, error } = await supabase
       .from('categories')
-      .insert(category)
+      .insert(category as any)
       .select()
       .single()
 
@@ -39,9 +39,9 @@ class CategoryService {
   }
 
   async update(id: string, updates: CategoryUpdate): Promise<Category> {
-    const { data, error } = await supabase
+    const { data, error } = await (supabase as any)
       .from('categories')
-      .update(updates)
+      .update(updates as any)
       .eq('id', id)
       .select()
       .single()

@@ -109,7 +109,7 @@ export class ShoppingListService {
       is_active?: boolean
     }
   ): Promise<void> {
-    const { error } = await supabase
+    const { error } = await (supabase as any)
       .from('shopping_lists')
       .update({
         ...updates,
@@ -136,7 +136,7 @@ export class ShoppingListService {
    * Mark a list as completed
    */
   async completeList(listId: string): Promise<void> {
-    const { error } = await supabase
+    const { error } = await (supabase as any)
       .from('shopping_lists')
       .update({
         is_active: false,
@@ -199,7 +199,7 @@ export class ShoppingListService {
       updateData.checked_at = updates.checked ? new Date().toISOString() : null
     }
 
-    const { error } = await supabase
+    const { error } = await (supabase as any)
       .from('shopping_list_items')
       .update(updateData)
       .eq('id', itemId)
@@ -234,8 +234,9 @@ export class ShoppingListService {
 
     if (error) throw error
 
-    const totalItems = data?.length || 0
-    const checkedItems = data?.filter(item => item.checked).length || 0
+    const rows = (data as any[]) || []
+    const totalItems = rows.length
+    const checkedItems = rows.filter(item => item.checked).length || 0
     const progress = totalItems > 0 ? (checkedItems / totalItems) * 100 : 0
 
     return {

@@ -185,7 +185,7 @@ export default function ParserTrainerPage() {
 
     const config = {
       supermarket: extractedData.supermarketName || extractedData.store || 'Unknown',
-      supermarketId: extractedData.supermarketId,
+      supermarketId: extractedData.supermarketId || undefined,
       patterns: Object.entries(patterns).reduce((acc, [key, value]) => {
         if (value.pattern) {
           acc[key] = {
@@ -223,7 +223,7 @@ export default function ParserTrainerPage() {
 
     const config = {
       supermarket: extractedData.supermarketName || extractedData.store || 'Unknown',
-      supermarketId: extractedData.supermarketId,
+      supermarketId: extractedData.supermarketId || undefined,
       patterns: Object.entries(patterns).reduce((acc, [key, value]) => {
         if (value.pattern) {
           acc[key] = {

@@ -73,13 +73,13 @@ Vercel automáticamente desplegará y activará el cron job.
 
 ## ✅ Checklist completo
 
-- [ ] Cuenta Gmail creada
-- [ ] Proyecto Google Cloud creado
-- [ ] Gmail API habilitada
-- [ ] Credenciales OAuth 2.0 creadas
-- [ ] Tokens obtenidos con `npm run gmail:setup`
-- [ ] Variables de entorno configuradas en Vercel
-- [ ] Código pusheado y desplegado
+- [x] Cuenta Gmail creada
+- [x] Proyecto Google Cloud creado
+- [x] Gmail API habilitada
+- [x] Credenciales OAuth 2.0 creadas
+- [x] Tokens obtenidos con `npm run gmail:setup`
+- [x] Variables de entorno configuradas en Vercel
+- [x] Código pusheado y desplegado
 - [ ] Email de prueba enviado
 - [ ] Ticket aparece en Groka
 - [ ] Email de confirmación recibido

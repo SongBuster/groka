@@ -482,35 +482,36 @@ export default function TicketsPage() {
     }
   }
 
-  const handleDeleteTicket = (ticketId: string, storeName: string | null) => {
-    confirm({
+  const handleDeleteTicket = async (ticketId: string, storeName: string | null) => {
+    const confirmed = await confirm({
       title: 'Eliminar ticket',
       message: `¿Estás seguro de eliminar el ticket${storeName ? ` de "${storeName}"` : ''}?\n\nEsta acción no se puede deshacer.`,
       type: 'error',
       confirmText: 'Eliminar',
-      cancelText: 'Cancelar',
-      onConfirm: async () => {
-        try {
-          setLoadingTickets(true)
-          await ticketService.deleteTicket(ticketId)
-          await loadTickets()
-          alert({
-            title: 'Ticket eliminado',
-            message: 'El ticket se ha eliminado correctamente',
-            type: 'success'
-          })
-        } catch (error) {
-          console.error('Error deleting ticket:', error)
-          alert({
-            title: 'Error',
-            message: 'No se pudo eliminar el ticket. Inténtalo de nuevo.',
-            type: 'error'
-          })
-        } finally {
-          setLoadingTickets(false)
-        }
-      }
+      cancelText: 'Cancelar'
     })
+
+    if (!confirmed) return
+
+    try {
+      setLoadingTickets(true)
+      await ticketService.deleteTicket(ticketId)
+      await loadTickets()
+      await alert({
+        title: 'Ticket eliminado',
+        message: 'El ticket se ha eliminado correctamente',
+        type: 'success'
+      })
+    } catch (error) {
+      console.error('Error deleting ticket:', error)
+      await alert({
+        title: 'Error',
+        message: 'No se pudo eliminar el ticket. Inténtalo de nuevo.',
+        type: 'error'
+      })
+    } finally {
+      setLoadingTickets(false)
+    }
   }
 
   const handleCloseModal = () => {
@@ -655,7 +656,7 @@ export default function TicketsPage() {
       }
 
       if (duplicateTicket) {
-        confirm({
+        const proceed = await confirm({
           title: '⚠️ Ticket duplicado',
           message: `Ya existe un ticket con ${
             duplicateTicket.ticket_number === parsedData.invoiceNumber 
@@ -664,10 +665,10 @@ export default function TicketsPage() {
           } en la base de datos.\n\n¿Deseas continuar y crear uno nuevo de todas formas?`,
           type: 'warning',
           confirmText: 'Continuar',
-          cancelText: 'Cancelar',
-          onConfirm: proceedWithParsing
+          cancelText: 'Cancelar'
         })
-        return
+        if (!proceed) return
+        proceedWithParsing()
       }
 
       // Si no hay duplicado, proceder directamente

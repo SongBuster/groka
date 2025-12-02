@@ -1,6 +1,6 @@
 import { useState, useEffect } from 'react'
 import { useAuthStore } from '../stores/authStore'
-import { Loader2, Plus, ShoppingCart, Trash2, Edit2, Check, Store, Calendar, ChevronRight } from 'lucide-react'
+import { Loader2, Plus, ShoppingCart, Trash2, Edit2, Check, Calendar, ChevronRight } from 'lucide-react'
 import shoppingListService from '../services/shoppingListService'
 import supermarketService from '../services/supermarketService'
 import { useDialog } from '../hooks/useDialog'
@@ -191,11 +191,6 @@ export default function ShoppingListsPage() {
     return true
   })
 
-  const getSupermarketName = (supermarketId: string | null) => {
-    if (!supermarketId) return 'Sin supermercado'
-    const supermarket = supermarkets.find(sm => sm.id === supermarketId)
-    return supermarket?.name || 'Desconocido'
-  }
 
   const getSupermarket = (supermarketId: string | null) => {
     if (!supermarketId) return null
