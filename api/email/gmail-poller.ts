@@ -247,9 +247,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
 
         // 3. Check if sender is a registered user in Supabase Auth
         const admin = supabase.auth.admin
-        const { data: usersPage, error: adminError } = await admin.listUsers({
-          email: details.from,
-        })
+        const { data: usersPage, error: adminError } = await admin.listUsers()
 
         if (adminError) {
           console.error('Auth admin error:', adminError)
@@ -304,8 +302,8 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
             const base64Data = await gmail.getAttachment(message.id, attachment.attachmentId)
             const pdfBuffer = base64ToBuffer(base64Data)
 
-            // Create File-like object for parser
-            const blob = new Blob([pdfBuffer], { type: 'application/pdf' })
+            // Create File-like object for parser (ensure BlobPart is a typed array)
+            const blob = new Blob([new Uint8Array(pdfBuffer)], { type: 'application/pdf' })
             const file = new File([blob], attachment.filename, { type: 'application/pdf' })
 
             // Parse PDF (try server-side). If unavailable, fallback to store as pending
@@ -365,7 +363,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
 
             processedTickets.push(attachment.filename)
             result.tickets.push({
-              email: authUser.email,
+              email: authUser.email ?? details.from,
               ticketId: ticket.id,
               fileName: attachment.filename,
             })

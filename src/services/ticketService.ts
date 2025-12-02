@@ -584,11 +584,11 @@ export class TicketService {
       .eq('parsed', false)
 
     if (error) throw error
-    const tickets = pending || []
+    const tickets: any[] = (pending as any[]) || []
     let processed = 0
     let errors = 0
 
-    for (const t of tickets) {
+    for (const t of tickets as any[]) {
       try {
         if (!t.file_url) {
           errors++
@@ -613,8 +613,7 @@ export class TicketService {
           parsing_error: null,
         } as any
 
-        const { error: upErr } = await supabase
-          .from('tickets')
+        const { error: upErr } = await (supabase.from('tickets') as any)
           .update(updateData as any)
           .eq('id', t.id)
 
