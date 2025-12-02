@@ -1,0 +1,25 @@
+name: Email Poller
+
+on:
+  schedule:
+    - cron: "*/10 * * * *" # every 10 minutes
+  workflow_dispatch: {}
+
+jobs:
+  poll:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Hit Gmail poller endpoint
+        env:
+          POLLER_SECRET: ${{ secrets.GMAIL_POLLER_SECRET }}
+          APP_URL: ${{ secrets.APP_URL }}
+        run: |
+          if [ -z "$POLLER_SECRET" ]; then
+            echo "Missing GMAIL_POLLER_SECRET repository secret" >&2
+            exit 1
+          fi
+          URL=${APP_URL:-https://groka.vercel.app}
+          echo "Calling: $URL/api/email/gmail-poller"
+          curl -sS -X GET "$URL/api/email/gmail-poller" \
+            -H "Authorization: Bearer $POLLER_SECRET" \
+            -w "\nHTTP %{http_code}\n" || exit 1
