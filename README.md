@@ -5,6 +5,7 @@ Gestiona tus tickets de compra, analiza tus gastos y crea listas inteligentes co
 ## 🚀 Características
 
 - 📄 **Upload de PDFs**: Sube tickets de supermercado y se parsean automáticamente
+- 📧 **Procesamiento por email**: Reenvía tickets por correo y se procesan automáticamente (ver [docs/EMAIL_PROCESSOR.md](./docs/EMAIL_PROCESSOR.md))
 - 📊 **Análisis inteligente**: Estadísticas de gastos, tendencias y predicciones
 - 🛍️ **Lista de compra**: Crea y gestiona listas directamente en la app
 - 👥 **Colaboración**: Comparte listas con otros usuarios

@@ -10,13 +10,17 @@
     "lint": "eslint .",
     "preview": "vite preview",
     "predev": "node ./scripts/generate-version.js",
-    "prebuild": "node ./scripts/generate-version.js"
+    "prebuild": "node ./scripts/generate-version.js",
+    "gmail:setup": "node ./scripts/get-gmail-tokens.js",
+    "gmail:poll": "node ./scripts/test-gmail-poller.js"
   },
   "dependencies": {
     "@supabase/supabase-js": "^2.83.0",
     "@tailwindcss/postcss": "^4.1.17",
+    "@vercel/node": "^5.5.14",
     "autoprefixer": "^10.4.22",
     "date-fns": "^4.1.0",
+    "googleapis": "^166.0.0",
     "lucide-react": "^0.554.0",
     "pdfjs-dist": "^5.4.394",
     "postcss": "^8.5.6",
