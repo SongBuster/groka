@@ -245,15 +245,22 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
         const details = await gmail.getMessageDetails(message.id)
         console.log(`Processing email from: ${details.from}`)
 
-        // 3. Check if sender is a registered user
-        const { data: user, error: userError } = await supabase
-          .from('users')
-          .select('id, email')
-          .eq('email', details.from)
-          .single()
+        // 3. Check if sender is a registered user in Supabase Auth
+        const admin = supabase.auth.admin
+        const { data: usersPage, error: adminError } = await admin.listUsers({
+          email: details.from,
+        })
 
-        if (userError || !user) {
-          console.log(`User not found: ${details.from}`)
+        if (adminError) {
+          console.error('Auth admin error:', adminError)
+        }
+
+        const authUser = usersPage?.users?.find(
+          (u: any) => (u.email || '').toLowerCase() === details.from.toLowerCase()
+        )
+
+        if (!authUser) {
+          console.log(`Auth user not found: ${details.from}`)
           // Send notification email
           await gmail.sendEmail(
             details.from,
@@ -306,7 +313,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
             const parsed = await pdfParser.default.parseTicketFromFile(file)
 
             // Upload PDF to Supabase Storage
-            const fileName = `${user.id}/${Date.now()}_${attachment.filename}`
+            const fileName = `${authUser.id}/${Date.now()}_${attachment.filename}`
             const { data: uploadData, error: uploadError } = await supabase.storage
               .from('tickets')
               .upload(fileName, pdfBuffer, {
@@ -321,7 +328,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
             const { data: ticket, error: ticketError } = await supabase
               .from('tickets')
               .insert({
-                user_id: user.id,
+                user_id: authUser.id,
                 supermarket_id: parsed.supermarketId,
                 file_name: attachment.filename,
                 file_url: publicUrl,
@@ -353,7 +360,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
 
             processedTickets.push(attachment.filename)
             result.tickets.push({
-              email: user.email,
+              email: authUser.email,
               ticketId: ticket.id,
               fileName: attachment.filename,
             })
