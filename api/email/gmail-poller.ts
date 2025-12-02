@@ -308,9 +308,14 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
             const blob = new Blob([pdfBuffer], { type: 'application/pdf' })
             const file = new File([blob], attachment.filename, { type: 'application/pdf' })
 
-            // Parse PDF (using existing pdfParser - imported dynamically to avoid Node.js issues)
-            const pdfParser = await import('../../src/services/pdfParser')
-            const parsed = await pdfParser.default.parseTicketFromFile(file)
+            // Parse PDF (try server-side). If unavailable, fallback to store as pending
+            let parsed: any = null
+            try {
+              const pdfParser = await import('../../src/services/pdfParser')
+              parsed = await pdfParser.default.parseTicketFromFile(file)
+            } catch (parseImportError: any) {
+              console.warn('Server-side parser not available, storing as pending:', parseImportError?.message)
+            }
 
             // Upload PDF to Supabase Storage
             const fileName = `${authUser.id}/${Date.now()}_${attachment.filename}`
@@ -329,23 +334,23 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
               .from('tickets')
               .insert({
                 user_id: authUser.id,
-                supermarket_id: parsed.supermarketId,
+                supermarket_id: parsed?.supermarketId || null,
                 file_name: attachment.filename,
                 file_url: publicUrl,
-                ticket_number: parsed.invoiceNumber,
-                store_name: parsed.store,
-                purchase_date: parsed.date,
-                total_amount: parsed.totalFromPDF || parsed.totalAmount,
-                parsed: true,
-                parsing_error: null,
+                ticket_number: parsed?.invoiceNumber || null,
+                store_name: parsed?.store || null,
+                purchase_date: parsed?.date || null,
+                total_amount: parsed?.totalFromPDF || parsed?.totalAmount || null,
+                parsed: !!parsed,
+                parsing_error: parsed ? null : 'Server-side parser unavailable. Please parse in app.',
               })
               .select()
               .single()
 
             if (ticketError) throw ticketError
 
-            // Save ticket items
-            if (parsed.products && parsed.products.length > 0) {
+            // Save ticket items if parsed
+            if (parsed?.products && parsed.products.length > 0) {
               const items = parsed.products.map((product: any) => ({
                 ticket_id: ticket.id,
                 product_name: product.name,
@@ -377,12 +382,12 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
           const ticketList = processedTickets.map((name) => `<li>${name}</li>`).join('')
           await gmail.sendEmail(
             details.from,
-            '✅ Groka - Tickets procesados correctamente',
+            '✅ Groka - Tickets recibidos',
             `
-            <h2>¡Tickets procesados!</h2>
-            <p>Hemos procesado correctamente los siguientes tickets:</p>
+            <h2>¡Tickets recibidos!</h2>
+            <p>Hemos recibido los siguientes tickets:</p>
             <ul>${ticketList}</ul>
-            <p>Ya puedes verlos en tu cuenta de <a href="https://groka.app">Groka</a>.</p>
+            <p>Ya aparecen en tu cuenta de <a href="https://groka.app">Groka</a>. ${errors.length === 0 ? '' : 'Algunos no pudieron ser procesados en el servidor y quedan pendientes de parseo en la app.'}
             ${errors.length > 0 ? `<p><strong>Errores:</strong></p><ul>${errors.map((e) => `<li>${e}</li>`).join('')}</ul>` : ''}
             `
           )

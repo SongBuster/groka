@@ -64,6 +64,29 @@ export default function TicketsPage() {
     }
   }, [user])
 
+  // Auto-process pending tickets received by email (parsed=false)
+  useEffect(() => {
+    const runPending = async () => {
+      if (!user) return
+      try {
+        const ticketServiceDynamic = (await import('../services/ticketService')).default
+        const result = await ticketServiceDynamic.processPendingTickets(user.id)
+        if (result.processed > 0) {
+          alert({
+            title: 'Tickets procesados automáticamente',
+            message: `Se han procesado ${result.processed} ticket(s) recibidos por email. ${result.errors ? `(${result.errors} con errores)` : ''}`,
+            type: 'success'
+          })
+          await loadTickets()
+        }
+      } catch (e) {
+        console.warn('Auto-process pending tickets failed', e)
+      }
+    }
+    runPending()
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [user])
+
   useEffect(() => {
     if (showManualModal) {
       loadAllProducts()

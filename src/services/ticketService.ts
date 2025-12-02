@@ -571,6 +571,77 @@ export class TicketService {
       }
     }
   }
+
+  /**
+   * Process pending tickets (parsed=false) by downloading the PDF and parsing client-side
+   */
+  async processPendingTickets(userId: string): Promise<{ processed: number; errors: number }> {
+    // 1. Fetch pending tickets for user
+    const { data: pending, error } = await supabase
+      .from('tickets')
+      .select('id, file_url, file_name')
+      .eq('user_id', userId)
+      .eq('parsed', false)
+
+    if (error) throw error
+    const tickets = pending || []
+    let processed = 0
+    let errors = 0
+
+    for (const t of tickets) {
+      try {
+        if (!t.file_url) {
+          errors++
+          continue
+        }
+        // 2. Download PDF
+        const resp = await fetch(t.file_url)
+        const blob = await resp.blob()
+        const file = new File([blob], t.file_name || `ticket_${t.id}.pdf`, { type: 'application/pdf' })
+
+        // 3. Parse PDF
+        const parsedData = await pdfParser.parseTicketFromFile(file)
+
+        // 4. Update ticket
+        const updateData: TicketInsert = {
+          supermarket_id: parsedData.supermarketId,
+          ticket_number: parsedData.invoiceNumber,
+          store_name: parsedData.store,
+          purchase_date: parsedData.date,
+          total_amount: parsedData.totalFromPDF || parsedData.totalAmount,
+          parsed: true,
+          parsing_error: null,
+        } as any
+
+        const { error: upErr } = await supabase
+          .from('tickets')
+          .update(updateData as any)
+          .eq('id', t.id)
+
+        if (upErr) throw upErr
+
+        // 5. Insert items
+        if (parsedData.products && parsedData.products.length > 0) {
+          const items = parsedData.products.map((p: any) => ({
+            ticket_id: t.id,
+            product_name: p.name,
+            quantity: p.quantity,
+            unit_price: p.unitPrice,
+            total_price: p.totalPrice,
+          }))
+          const { error: itemsErr } = await supabase.from('ticket_items').insert(items as any)
+          if (itemsErr) console.warn('Insert items error', itemsErr)
+        }
+
+        processed++
+      } catch (e) {
+        console.error('Error processing pending ticket', t.id, e)
+        errors++
+      }
+    }
+
+    return { processed, errors }
+  }
 }
 
 export default new TicketService()
