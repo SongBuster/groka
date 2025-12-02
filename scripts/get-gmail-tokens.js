@@ -12,7 +12,7 @@ import { google } from 'googleapis'
 // Configuration (get these from Google Cloud Console)
 const CLIENT_ID = process.env.GMAIL_CLIENT_ID || 'YOUR_CLIENT_ID'
 const CLIENT_SECRET = process.env.GMAIL_CLIENT_SECRET || 'YOUR_CLIENT_SECRET'
-const REDIRECT_URI = 'http://localhost:3000/oauth/callback'
+const REDIRECT_URI = 'http://localhost:5173/oauth/callback'
 
 if (CLIENT_ID === 'YOUR_CLIENT_ID' || CLIENT_SECRET === 'YOUR_CLIENT_SECRET') {
   console.error('❌ Error: Please set GMAIL_CLIENT_ID and GMAIL_CLIENT_SECRET environment variables')
@@ -40,7 +40,7 @@ console.log('\n📧 Gmail OAuth Token Generator\n')
 console.log('1. Visit this URL and authorize the app:')
 console.log('\n   ', authUrl, '\n')
 console.log('2. After authorization, you will be redirected to a URL like:')
-console.log('   http://localhost:3000/oauth/callback?code=XXXXX')
+console.log('   http://localhost:5173/oauth/callback?code=XXXXX')
 console.log('\n3. Copy the "code" parameter from that URL\n')
 
 const rl = readline.createInterface({
