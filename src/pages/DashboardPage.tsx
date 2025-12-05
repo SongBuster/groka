@@ -1,7 +1,52 @@
 import { ShoppingCart, Package, Receipt } from 'lucide-react'
 import { Link } from 'react-router-dom'
+import { useEffect, useState } from 'react'
+import { useAuthStore } from '../stores/authStore'
+import { supabase } from '../lib/supabase'
 
 export default function DashboardPage() {
+  const { user } = useAuthStore()
+  const [stats, setStats] = useState({ tickets: 0, products: 0, lists: 0 })
+  const [loading, setLoading] = useState(true)
+
+  useEffect(() => {
+    if (!user?.id) return
+
+    const loadStats = async () => {
+      try {
+        // Get ticket count for user
+        const { count: ticketCount } = await supabase
+          .from('tickets')
+          .select('*', { count: 'exact', head: true })
+          .eq('user_id', user.id)
+
+        // Get all products count (products are global)
+        const { count: productCount } = await supabase
+          .from('products')
+          .select('*', { count: 'exact', head: true })
+
+        // Get active shopping lists for user (using owner_id and is_active)
+        const { data: lists } = await supabase
+          .from('shopping_lists')
+          .select('id')
+          .eq('owner_id', user.id)
+          .eq('is_active', true)
+
+        setStats({
+          tickets: ticketCount || 0,
+          products: productCount || 0,
+          lists: lists?.length || 0
+        })
+      } catch (error) {
+        console.error('Error loading dashboard stats:', error)
+      } finally {
+        setLoading(false)
+      }
+    }
+
+    loadStats()
+  }, [user?.id])
+
   const sections = [
     {
       id: 'tickets',
@@ -93,15 +138,21 @@ export default function DashboardPage() {
         {/* Quick Stats or Info */}
         <div className="mt-12 sm:mt-16 grid grid-cols-1 sm:grid-cols-3 gap-4 sm:gap-6">
           <div className="bg-white/60 backdrop-blur-sm rounded-xl p-6 text-center border border-primary-100">
-            <div className="text-3xl font-bold text-primary-600 mb-1">0</div>
+            <div className="text-3xl font-bold text-primary-600 mb-1">
+              {loading ? '-' : stats.tickets}
+            </div>
             <div className="text-sm text-secondary-600">Tickets guardados</div>
           </div>
           <div className="bg-white/60 backdrop-blur-sm rounded-xl p-6 text-center border border-primary-100">
-            <div className="text-3xl font-bold text-primary-600 mb-1">0</div>
+            <div className="text-3xl font-bold text-primary-600 mb-1">
+              {loading ? '-' : stats.products}
+            </div>
             <div className="text-sm text-secondary-600">Productos registrados</div>
           </div>
           <div className="bg-white/60 backdrop-blur-sm rounded-xl p-6 text-center border border-primary-100">
-            <div className="text-3xl font-bold text-primary-600 mb-1">0</div>
+            <div className="text-3xl font-bold text-primary-600 mb-1">
+              {loading ? '-' : stats.lists}
+            </div>
             <div className="text-sm text-secondary-600">Listas activas</div>
           </div>
         </div>

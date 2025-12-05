@@ -1,11 +1,12 @@
 import { useState, useEffect } from 'react'
-import { Search, CheckCircle, AlertCircle, Clock, Edit2, Plus } from 'lucide-react'
+import { Search, CheckCircle, AlertCircle, Clock, Edit2, Plus, Trash2 } from 'lucide-react'
 import productService, { type ProductWithCategory } from '../services/productService'
 import categoryService from '../services/categoryService'
 import type { Database } from '../types/database'
 import { useAuthStore } from '../stores/authStore'
 import { useDialog } from '../hooks/useDialog'
 import CustomSelect from '../components/CustomSelect'
+import AliasManager from '../components/AliasManager'
 import { notifyProductsUpdated } from '../hooks/useProductsCount'
 
 type Category = Database['public']['Tables']['categories']['Row']
@@ -20,18 +21,16 @@ export default function ProductsPage() {
   const [searchQuery, setSearchQuery] = useState('')
   const [filterStatus, setFilterStatus] = useState<ReviewStatus>('all')
   const [selectedCategory, setSelectedCategory] = useState<string | null>(null)
-  const [editingProduct, setEditingProduct] = useState<ProductWithCategory | null>(null)
-  const [showEditModal, setShowEditModal] = useState(false)
-  const [showCreateModal, setShowCreateModal] = useState(false)
+  const [currentProduct, setCurrentProduct] = useState<ProductWithCategory | null>(null)
+  const [showModal, setShowModal] = useState(false)
+  const [isEditMode, setIsEditMode] = useState(false)
+  const [isNewlyCreated, setIsNewlyCreated] = useState(false)
   const [newProduct, setNewProduct] = useState({
     name: '',
-    alias: '',
     category_id: '',
   })
   const [categorySearch, setCategorySearch] = useState('')
   const [showCategoryDropdown, setShowCategoryDropdown] = useState(false)
-  const [categorySearchEdit, setCategorySearchEdit] = useState('')
-  const [showCategoryDropdownEdit, setShowCategoryDropdownEdit] = useState(false)
 
   useEffect(() => {
     loadData()
@@ -54,52 +53,88 @@ export default function ProductsPage() {
   }
 
   const handleSaveProduct = async () => {
-    if (!editingProduct) return
-
-    try {
-      await productService.update(
-        editingProduct.id,
-        {
-          alias: editingProduct.alias,
-          category_id: editingProduct.category_id,
-        },
-        user?.id
-      )
-      await loadData()
-      notifyProductsUpdated() // Notificar actualización
-      setShowEditModal(false)
-      setEditingProduct(null)
-    } catch (error) {
-      console.error('Error updating product:', error)
+    if (isEditMode) {
+      if (!currentProduct) return
+      try {
+        await productService.update(
+          currentProduct.id,
+          {
+            category_id: currentProduct.category_id,
+          },
+          user?.id
+        )
+        await loadData()
+        notifyProductsUpdated()
+        closeModal()
+      } catch (error) {
+        console.error('Error updating product:', error)
+      }
+    } else {
+      if (!newProduct.name.trim()) return
+      try {
+        const createdProduct = await productService.create({
+          name: newProduct.name.trim(),
+          category_id: newProduct.category_id || null,
+        })
+        // Switch to edit mode to allow adding aliases
+        setIsEditMode(true)
+        setIsNewlyCreated(true)
+        setCurrentProduct(createdProduct as ProductWithCategory)
+        setNewProduct({ name: '', category_id: '' })
+        await loadData()
+        notifyProductsUpdated()
+      } catch (error) {
+        console.error('Error creating product:', error)
+        alert({
+          title: 'Error',
+          message: 'No se pudo crear el producto. Puede que ya exista.',
+          type: 'error'
+        })
+      }
     }
   }
 
-  const handleCreateProduct = async () => {
-    if (!newProduct.name.trim()) return
+  const handleDeleteProduct = async () => {
+    if (!currentProduct) return
+    if (!confirm(`¿Estás seguro de que deseas eliminar "${currentProduct.name}"?`)) return
 
     try {
-      await productService.create({
-        name: newProduct.name.trim(),
-        alias: newProduct.alias.trim() || null,
-        category_id: newProduct.category_id || null,
-      })
+      await productService.delete(currentProduct.id)
       await loadData()
-      notifyProductsUpdated() // Notificar actualización
-      setShowCreateModal(false)
-      setNewProduct({ name: '', alias: '', category_id: '' })
-      alert({
-        title: 'Producto creado',
-        message: 'El producto se ha creado correctamente',
-        type: 'success'
-      })
+      notifyProductsUpdated()
+      closeModal()
     } catch (error) {
-      console.error('Error creating product:', error)
+      console.error('Error deleting product:', error)
       alert({
         title: 'Error',
-        message: 'No se pudo crear el producto. Puede que ya exista.',
+        message: 'No se pudo eliminar el producto',
         type: 'error'
       })
     }
+  }
+
+  const openCreateModal = () => {
+    setIsEditMode(false)
+    setCurrentProduct(null)
+    setNewProduct({ name: '', category_id: '' })
+    setCategorySearch('')
+    setShowModal(true)
+  }
+
+  const openEditModal = (product: ProductWithCategory) => {
+    setIsEditMode(true)
+    setCurrentProduct(product)
+    setCategorySearch('')
+    setShowModal(true)
+  }
+
+  const closeModal = () => {
+    setShowModal(false)
+    setIsEditMode(false)
+    setIsNewlyCreated(false)
+    setCurrentProduct(null)
+    setNewProduct({ name: '', category_id: '' })
+    setCategorySearch('')
   }
 
   const filteredProducts = products.filter(product => {
@@ -107,8 +142,7 @@ export default function ProductsPage() {
     if (searchQuery) {
       const query = searchQuery.toLowerCase()
       const matchesName = product.name.toLowerCase().includes(query)
-      const matchesAlias = product.alias?.toLowerCase().includes(query)
-      if (!matchesName && !matchesAlias) return false
+      if (!matchesName) return false
     }
 
     // Filter by status
@@ -167,7 +201,7 @@ export default function ProductsPage() {
         </div>
         <div className="flex gap-2">
           <button
-            onClick={() => setShowCreateModal(true)}
+            onClick={openCreateModal}
             className="flex items-center gap-2 px-4 py-2 bg-primary-600 text-white rounded-lg hover:bg-primary-700 transition-colors shadow-lg shadow-primary-500/30"
           >
             <Plus className="w-5 h-5" />
@@ -294,7 +328,7 @@ export default function ProductsPage() {
                     Nombre
                   </th>
                   <th className="px-4 py-3 text-left text-xs font-medium text-secondary-700 uppercase tracking-wider">
-                    Alias
+                    Aliases
                   </th>
                   <th className="px-4 py-3 text-left text-xs font-medium text-secondary-700 uppercase tracking-wider">
                     Categoría
@@ -321,9 +355,17 @@ export default function ProductsPage() {
                       </div>
                     </td>
                     <td className="px-4 py-3">
-                      <div className="text-sm text-secondary-600">
-                        {product.alias || '-'}
-                      </div>
+                      {product.aliases && product.aliases.length > 0 ? (
+                        <div className="flex flex-wrap gap-1">
+                          {product.aliases.map((alias) => (
+                            <span key={alias} className="inline-block px-2 py-1 bg-secondary-100 text-secondary-700 rounded text-xs">
+                              {alias}
+                            </span>
+                          ))}
+                        </div>
+                      ) : (
+                        <span className="text-secondary-400 text-xs">-</span>
+                      )}
                     </td>
                     <td className="px-4 py-3">
                       {product.category ? (
@@ -341,16 +383,25 @@ export default function ProductsPage() {
                       )}
                     </td>
                     <td className="px-4 py-3 text-right">
-                      <button
-                        onClick={() => {
-                          setEditingProduct(product)
-                          setShowEditModal(true)
-                        }}
-                        className="inline-flex items-center gap-1 px-3 py-1 text-sm text-primary-700 hover:bg-primary-50 rounded-lg transition-colors"
-                      >
-                        <Edit2 className="w-4 h-4" />
-                        Editar
-                      </button>
+                      <div className="flex gap-2 justify-end">
+                        <button
+                          onClick={() => openEditModal(product)}
+                          className="inline-flex items-center gap-1 px-3 py-1 text-sm text-primary-700 hover:bg-primary-50 rounded-lg transition-colors"
+                        >
+                          <Edit2 className="w-4 h-4" />
+                          Editar
+                        </button>
+                        <button
+                          onClick={() => {
+                            setCurrentProduct(product)
+                            handleDeleteProduct()
+                          }}
+                          className="inline-flex items-center gap-1 px-3 py-1 text-sm text-red-700 hover:bg-red-50 rounded-lg transition-colors"
+                        >
+                          <Trash2 className="w-4 h-4" />
+                          Eliminar
+                        </button>
+                      </div>
                     </td>
                   </tr>
                 ))}
@@ -361,157 +412,40 @@ export default function ProductsPage() {
       )}
 
       {/* Edit Modal */}
-      {showEditModal && editingProduct && (
+      {/* Unified Product Modal */}
+      {showModal && (
         <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50 p-4">
           <div className="bg-white rounded-2xl max-w-md w-full p-6">
             <h3 className="text-xl font-bold text-secondary-900 mb-4">
-              Editar Producto
+              {isNewlyCreated ? 'Producto Creado' : isEditMode ? 'Editar Producto' : 'Nuevo Producto'}
             </h3>
             
             <div className="space-y-4">
+              {/* Name Field */}
               <div>
                 <label className="block text-sm font-medium text-secondary-700 mb-1">
-                  Nombre original
+                  {isEditMode ? 'Nombre original' : 'Nombre del producto *'}
                 </label>
-                <input
-                  type="text"
-                  value={editingProduct.name}
-                  disabled
-                  className="w-full px-4 py-2 border border-secondary-300 rounded-lg bg-secondary-50 text-secondary-600"
-                />
-              </div>
-
-              <div>
-                <label className="block text-sm font-medium text-secondary-700 mb-1">
-                  Alias (nombre para listas)
-                </label>
-                <input
-                  type="text"
-                  value={editingProduct.alias || ''}
-                  onChange={(e) => setEditingProduct({ ...editingProduct, alias: e.target.value })}
-                  placeholder="Ej: Cerveza 0 Tostada"
-                  className="w-full px-4 py-2 border border-secondary-300 rounded-lg focus:ring-2 focus:ring-primary-500 focus:border-transparent"
-                />
-              </div>
-
-              <div>
-                <label className="block text-sm font-medium text-secondary-700 mb-1">
-                  Categoría
-                </label>
-                <div className="relative">
+                {isEditMode ? (
                   <input
                     type="text"
-                    value={categorySearchEdit}
-                    onChange={(e) => {
-                      setCategorySearchEdit(e.target.value)
-                      setShowCategoryDropdownEdit(true)
-                    }}
-                    onFocus={() => setShowCategoryDropdownEdit(true)}
-                    onBlur={() => setTimeout(() => setShowCategoryDropdownEdit(false), 200)}
-                    placeholder={editingProduct.category ? `${editingProduct.category.icon} ${editingProduct.category.name}` : 'Escribe para buscar...'}
-                    className="w-full px-4 py-2 border-2 border-primary-300 rounded-lg focus:ring-2 focus:ring-primary-500 focus:border-primary-500 transition-all"
+                    value={currentProduct?.name || ''}
+                    disabled
+                    className="w-full px-4 py-2 border border-secondary-300 rounded-lg bg-secondary-50 text-secondary-600"
                   />
-                  {showCategoryDropdownEdit && (
-                    <div className="absolute top-full left-0 right-0 mt-1 bg-white border border-secondary-300 rounded-lg shadow-lg max-h-64 overflow-y-auto z-50">
-                      <div
-                        className="px-4 py-3 hover:bg-secondary-50 cursor-pointer transition-colors"
-                        onClick={() => {
-                          setEditingProduct({ ...editingProduct, category_id: null, category: null })
-                          setCategorySearchEdit('')
-                          setShowCategoryDropdownEdit(false)
-                        }}
-                      >
-                        <span className="inline-block px-3 py-1 rounded-lg text-white text-sm font-semibold" style={{ backgroundColor: '#9ca3af' }}>
-                          Sin categoría
-                        </span>
-                      </div>
-                      {categories
-                        .filter(cat => 
-                          categorySearchEdit === '' || 
-                          cat.name.toLowerCase().includes(categorySearchEdit.toLowerCase())
-                        )
-                        .sort((a, b) => a.name.localeCompare(b.name))
-                        .map(cat => (
-                          <div
-                            key={cat.id}
-                            className="px-4 py-3 hover:bg-secondary-50 cursor-pointer transition-colors"
-                            onClick={() => {
-                              setEditingProduct({ ...editingProduct, category_id: cat.id, category: cat })
-                              setCategorySearchEdit('')
-                              setShowCategoryDropdownEdit(false)
-                            }}
-                          >
-                            <span className="inline-block px-3 py-1 rounded-lg text-white text-sm font-semibold" style={{ backgroundColor: cat.color || '#6b7280' }}>
-                              {cat.icon} {cat.name}
-                            </span>
-                          </div>
-                        ))}
-                    </div>
-                  )}
-                </div>
-              </div>
-            </div>
-
-            <div className="flex gap-3 mt-6">
-              <button
-                onClick={() => {
-                  setShowEditModal(false)
-                  setEditingProduct(null)
-                }}
-                className="flex-1 px-4 py-2 border border-secondary-300 text-secondary-700 rounded-lg hover:bg-secondary-50 transition-colors"
-              >
-                Cancelar
-              </button>
-              <button
-                onClick={handleSaveProduct}
-                className="flex-1 px-4 py-2 bg-primary-600 text-white rounded-lg hover:bg-primary-700 transition-colors"
-              >
-                Guardar
-              </button>
-            </div>
-          </div>
-        </div>
-      )}
-
-      {/* Create Product Modal */}
-      {showCreateModal && (
-        <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50 p-4">
-          <div className="bg-white rounded-2xl max-w-md w-full p-6">
-            <h3 className="text-xl font-bold text-secondary-900 mb-4">
-              Nuevo Producto
-            </h3>
-            
-            <div className="space-y-4">
-              <div>
-                <label className="block text-sm font-medium text-secondary-700 mb-1">
-                  Nombre del producto *
-                </label>
-                <input
-                  type="text"
-                  value={newProduct.name}
-                  onChange={(e) => setNewProduct({ ...newProduct, name: e.target.value })}
-                  placeholder="Ej: Cerveza 0,0 Tostada Pack-6"
-                  className="w-full px-4 py-2 border border-secondary-300 rounded-lg focus:ring-2 focus:ring-primary-500 focus:border-transparent"
-                  autoFocus
-                />
+                ) : (
+                  <input
+                    type="text"
+                    value={newProduct.name}
+                    onChange={(e) => setNewProduct({ ...newProduct, name: e.target.value })}
+                    placeholder="Ej: Cerveza 0,0 Tostada Pack-6"
+                    className="w-full px-4 py-2 border border-secondary-300 rounded-lg focus:ring-2 focus:ring-primary-500 focus:border-transparent"
+                    autoFocus
+                  />
+                )}
               </div>
 
-              <div>
-                <label className="block text-sm font-medium text-secondary-700 mb-1">
-                  Alias (nombre para listas)
-                </label>
-                <input
-                  type="text"
-                  value={newProduct.alias}
-                  onChange={(e) => setNewProduct({ ...newProduct, alias: e.target.value })}
-                  placeholder="Ej: Cerveza 0 Tostada"
-                  className="w-full px-4 py-2 border border-secondary-300 rounded-lg focus:ring-2 focus:ring-primary-500 focus:border-transparent"
-                />
-                <p className="text-xs text-secondary-600 mt-1">
-                  Este será el nombre que aparecerá en las listas de la compra
-                </p>
-              </div>
-
+              {/* Category Field */}
               <div>
                 <label className="block text-sm font-medium text-secondary-700 mb-1">
                   Categoría
@@ -526,7 +460,11 @@ export default function ProductsPage() {
                     }}
                     onFocus={() => setShowCategoryDropdown(true)}
                     onBlur={() => setTimeout(() => setShowCategoryDropdown(false), 200)}
-                    placeholder={newProduct.category_id ? categories.find(c => c.id === newProduct.category_id)?.name || 'Escribe para buscar...' : 'Escribe para buscar...'}
+                    placeholder={
+                      isEditMode
+                        ? currentProduct?.category ? `${currentProduct.category.icon} ${currentProduct.category.name}` : 'Escribe para buscar...'
+                        : newProduct.category_id ? categories.find(c => c.id === newProduct.category_id)?.name || 'Escribe para buscar...' : 'Escribe para buscar...'
+                    }
                     className="w-full px-4 py-2 border-2 border-primary-300 rounded-lg focus:ring-2 focus:ring-primary-500 focus:border-primary-500 transition-all"
                   />
                   {showCategoryDropdown && (
@@ -534,7 +472,11 @@ export default function ProductsPage() {
                       <div
                         className="px-4 py-3 hover:bg-secondary-50 cursor-pointer transition-colors"
                         onClick={() => {
-                          setNewProduct({ ...newProduct, category_id: '' })
+                          if (isEditMode) {
+                            setCurrentProduct({ ...currentProduct, category_id: null, category: null } as ProductWithCategory)
+                          } else {
+                            setNewProduct({ ...newProduct, category_id: '' })
+                          }
                           setCategorySearch('')
                           setShowCategoryDropdown(false)
                         }}
@@ -554,7 +496,11 @@ export default function ProductsPage() {
                             key={cat.id}
                             className="px-4 py-3 hover:bg-secondary-50 cursor-pointer transition-colors"
                             onClick={() => {
-                              setNewProduct({ ...newProduct, category_id: cat.id })
+                              if (isEditMode) {
+                                setCurrentProduct({ ...currentProduct, category_id: cat.id, category: cat } as ProductWithCategory)
+                              } else {
+                                setNewProduct({ ...newProduct, category_id: cat.id })
+                              }
                               setCategorySearch('')
                               setShowCategoryDropdown(false)
                             }}
@@ -567,28 +513,52 @@ export default function ProductsPage() {
                     </div>
                   )}
                 </div>
-                <p className="text-xs text-secondary-600 mt-1">
-                  Si no seleccionas una categoría, se intentará asignar automáticamente según el nombre
-                </p>
+                {!isEditMode && (
+                  <p className="text-xs text-secondary-600 mt-1">
+                    Si no seleccionas una categoría, se intentará asignar automáticamente según el nombre
+                  </p>
+                )}
               </div>
+
+              {/* Alias Manager - show in edit mode or newly created */}
+              {isEditMode && currentProduct && (
+                <>
+                  {isNewlyCreated && (
+                    <div className="bg-blue-50 border border-blue-200 rounded-lg p-3 mb-2">
+                      <p className="text-sm text-blue-700">✓ Producto creado correctamente. Ahora puedes añadir aliases.</p>
+                    </div>
+                  )}
+                  <AliasManager
+                    productId={currentProduct.id}
+                    aliases={currentProduct.aliases}
+                    onUpdated={() => loadData()}
+                  />
+                </>
+              )}
             </div>
 
+            {/* Action Buttons */}
             <div className="flex gap-3 mt-6">
               <button
-                onClick={() => {
-                  setShowCreateModal(false)
-                  setNewProduct({ name: '', alias: '', category_id: '' })
-                }}
+                onClick={closeModal}
                 className="flex-1 px-4 py-2 border border-secondary-300 text-secondary-700 rounded-lg hover:bg-secondary-50 transition-colors"
               >
                 Cancelar
               </button>
+              {isEditMode && (
+                <button
+                  onClick={handleDeleteProduct}
+                  className="flex-1 px-4 py-2 bg-red-600 text-white rounded-lg hover:bg-red-700 transition-colors"
+                >
+                  Eliminar
+                </button>
+              )}
               <button
-                onClick={handleCreateProduct}
-                disabled={!newProduct.name.trim()}
+                onClick={isNewlyCreated ? closeModal : handleSaveProduct}
+                disabled={!isEditMode && !newProduct.name.trim()}
                 className="flex-1 px-4 py-2 bg-primary-600 text-white rounded-lg hover:bg-primary-700 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
               >
-                Crear producto
+                {isNewlyCreated ? 'Listo' : isEditMode ? 'Guardar' : 'Crear producto'}
               </button>
             </div>
           </div>

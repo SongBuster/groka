@@ -148,27 +148,71 @@ export class ShoppingListService {
   }
 
   /**
+   * Get a single list by ID
+   */
+  async getListById(listId: string): Promise<ShoppingList> {
+    const { data, error } = await supabase
+      .from('shopping_lists')
+      .select('*')
+      .eq('id', listId)
+      .single()
+
+    if (error) throw error
+    if (!data) throw new Error('List not found')
+
+    return data
+  }
+
+  /**
+   * Get items from a list with product details
+   */
+  async getListItems(listId: string): Promise<any[]> {
+    const { data, error } = await supabase
+      .from('shopping_list_items')
+      .select(`
+        *,
+        product:products(
+          id,
+          name,
+          alias,
+          category:categories(id, name, icon, color)
+        )
+      `)
+      .eq('list_id', listId)
+      .order('created_at', { ascending: true })
+
+    if (error) throw error
+    return data || []
+  }
+
+  /**
    * Add item to shopping list
    */
   async addItem(
     listId: string,
-    name: string,
-    quantity: number = 1,
-    productId?: string,
-    notes?: string
+    itemData: {
+      product_id?: string | null
+      name: string
+      quantity?: number
+      weight?: number | null
+      estimated_price?: number | null
+      notes?: string | null
+    }
   ): Promise<ShoppingListItem> {
-    const itemData: ShoppingListItemInsert = {
+    const insertData: ShoppingListItemInsert = {
       list_id: listId,
-      product_id: productId || null,
-      name,
-      quantity,
-      notes: notes || null,
+      product_id: itemData.product_id || null,
+      name: itemData.name,
+      quantity: itemData.quantity || 1,
+      weight: itemData.weight || null,
+      estimated_price: itemData.estimated_price || null,
+      notes: itemData.notes || null,
       checked: false
     }
 
     const { data, error } = await supabase
       .from('shopping_list_items')
-      .insert(itemData as any)
+      .insert(insertData as any)
       .select()
       .single()
 
@@ -186,17 +230,17 @@ export class ShoppingListService {
     updates: {
       name?: string
       quantity?: number
+      weight?: number | null
+      actual_price?: number | null
       notes?: string | null
       checked?: boolean
+      checked_at?: string | null
+      checked_by?: string | null
     }
   ): Promise<void> {
     const updateData: any = {
       ...updates,
       updated_at: new Date().toISOString()
-    }
-
-    if (updates.checked !== undefined) {
-      updateData.checked_at = updates.checked ? new Date().toISOString() : null
     }
 
     const { error } = await (supabase as any)
@@ -208,15 +252,22 @@ export class ShoppingListService {
   }
 
   /**
-   * Delete item from shopping list
+   * Remove item from shopping list
    */
-  async deleteItem(itemId: string): Promise<void> {
+  async removeItem(itemId: string): Promise<void> {
     const { error } = await supabase
       .from('shopping_list_items')
       .delete()
       .eq('id', itemId)
 
     if (error) throw error
+  }
+
+  /**
+   * Delete item from shopping list (alias for removeItem)
+   */
+  async deleteItem(itemId: string): Promise<void> {
+    return this.removeItem(itemId)
   }
 
   /**

@@ -153,7 +153,7 @@ export interface Database {
         Row: {
           id: string
           name: string
-          alias: string | null
+          aliases: string[] | null
           category_id: string | null
           review_status: 'pending' | 'uncategorized' | 'reviewed'
           last_reviewed_at: string | null
@@ -164,7 +164,7 @@ export interface Database {
         Insert: {
           id?: string
           name: string
-          alias?: string | null
+          aliases?: string[] | null
           category_id?: string | null
           review_status?: 'pending' | 'uncategorized' | 'reviewed'
           last_reviewed_at?: string | null
@@ -175,7 +175,7 @@ export interface Database {
         Update: {
           id?: string
           name?: string
-          alias?: string | null
+          aliases?: string[] | null
           category_id?: string | null
           review_status?: 'pending' | 'uncategorized' | 'reviewed'
           last_reviewed_at?: string | null
@@ -258,6 +258,9 @@ export interface Database {
           product_id: string | null
           name: string
           quantity: number
+          weight: number | null
+          actual_price: number | null
+          estimated_price: number | null
           notes: string | null
           checked: boolean
           checked_at: string | null
@@ -271,6 +274,9 @@ export interface Database {
           product_id?: string | null
           name: string
           quantity?: number
+          weight?: number | null
+          actual_price?: number | null
+          estimated_price?: number | null
           notes?: string | null
           checked?: boolean
           checked_at?: string | null
@@ -284,6 +290,9 @@ export interface Database {
           product_id?: string | null
           name?: string
           quantity?: number
+          weight?: number | null
+          actual_price?: number | null
+          estimated_price?: number | null
           notes?: string | null
           checked?: boolean
           checked_at?: string | null

@@ -88,12 +88,150 @@ class ProductService {
         *,
         category:categories(id, name, icon, color)
       `)
-      .or(`name.ilike.%${query}%,alias.ilike.%${query}%`)
+      .ilike('name', `%${query}%`)
       .order('name')
       .limit(50)
 
     if (error) throw error
     return data as ProductWithCategory[]
+  }
+
+  /**
+   * Search products with priority: first by alias, then by name
+   */
+  async searchProductsWithPriority(query: string): Promise<ProductWithCategory[]> {
+    if (!query.trim()) return []
+
+    const lowerQuery = query.toLowerCase()
+
+    // Search by aliases first
+    const { data: byAlias, error: aliasError } = await supabase
+      .from('products')
+      .select(`
+        *,
+        category:categories(id, name, icon, color)
+      `)
+      .filter('aliases', 'cs', `{"${lowerQuery}"}`)
+      .order('name')
+      .limit(10)
+
+    if (aliasError) {
+      // Fallback if the array search fails
+      const { data: fallback, error: fallbackError } = await supabase
+        .from('products')
+        .select(`
+          *,
+          category:categories(id, name, icon, color)
+        `)
+        .ilike('name', `%${query}%`)
+        .order('name')
+        .limit(10)
+
+      if (fallbackError) throw fallbackError
+      if (fallback && fallback.length > 0) {
+        return fallback as ProductWithCategory[]
+      }
+    } else if (byAlias && byAlias.length > 0) {
+      return byAlias as ProductWithCategory[]
+    }
+
+    // Otherwise, search by name
+    const { data: byName, error: nameError } = await supabase
+      .from('products')
+      .select(`
+        *,
+        category:categories(id, name, icon, color)
+      `)
+      .ilike('name', `%${query}%`)
+      .order('name')
+      .limit(10)
+
+    if (nameError) throw nameError
+    return (byName as ProductWithCategory[]) || []
+  }
+
+  /**
+   * Get the last price of a product from tickets
+   */
+  async getLastPrice(productId: string): Promise<number | null> {
+    const { data, error } = await supabase
+      .from('ticket_items')
+      .select('unit_price, ticket:tickets!inner(purchase_date)')
+      .eq('product_id', productId)
+      .not('unit_price', 'is', null)
+      .order('ticket.purchase_date', { ascending: false })
+      .limit(1)
+      .single()
+
+    if (error || !data) return null
+    return (data as any).unit_price
+  }
+
+  /**
+   * Add an alias to a product
+   */
+  async addAlias(productId: string, newAlias: string): Promise<void> {
+    // Get current product
+    const { data: product, error: getError } = await (supabase as any)
+      .from('products')
+      .select('aliases')
+      .eq('id', productId)
+      .single()
+
+    if (getError) throw getError
+    if (!product) throw new Error('Product not found')
+
+    // Add new alias to array if not already present
+    const currentAliases = (product.aliases as any[]) || []
+    const lowerNewAlias = newAlias.toLowerCase().trim()
+    
+    if (!currentAliases.some((a: any) => a.toLowerCase() === lowerNewAlias)) {
+      currentAliases.push(lowerNewAlias)
+    }
+
+    // Update product
+    const { error: updateError } = await (supabase as any)
+      .from('products')
+      .update({
+        aliases: currentAliases,
+        updated_at: new Date().toISOString()
+      })
+      .eq('id', productId)
+
+    if (updateError) throw updateError
+  }
+
+  /**
+   * Remove an alias from a product
+   */
+  async removeAlias(productId: string, aliasToRemove: string): Promise<void> {
+    // Get current product
+    const { data: product, error: getError } = await (supabase as any)
+      .from('products')
+      .select('aliases')
+      .eq('id', productId)
+      .single()
+
+    if (getError) throw getError
+    if (!product) throw new Error('Product not found')
+
+    // Remove alias from array
+    const currentAliases = (product.aliases as any[]) || []
+    const lowerRemove = aliasToRemove.toLowerCase()
+    const updatedAliases = currentAliases.filter(
+      (a: any) => a.toLowerCase() !== lowerRemove
+    )
+
+    // Update product
+    const { error: updateError } = await (supabase as any)
+      .from('products')
+      .update({
+        aliases: updatedAliases,
+        updated_at: new Date().toISOString()
+      })
+      .eq('id', productId)
+
+    if (updateError) throw updateError
   }
 
   async getById(id: string): Promise<ProductWithCategory | null> {
@@ -147,12 +285,17 @@ class ProductService {
   }
 
   async delete(id: string): Promise<void> {
-    const { error } = await supabase
+    const { error, data } = await (supabase as any)
       .from('products')
       .delete()
       .eq('id', id)
 
-    if (error) throw error
+    if (error) {
+      console.error('Delete error:', error)
+      throw error
+    }
+    
+    console.log('Delete response:', data)
   }
 
   async bulkUpdateCategory(productIds: string[], categoryId: string, userId?: string): Promise<void> {
