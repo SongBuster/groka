@@ -14,7 +14,7 @@ type ReviewStatus = 'pending' | 'uncategorized' | 'reviewed' | 'all'
 
 export default function ProductsPage() {
   const { user } = useAuthStore()
-  const { alert, DialogComponent } = useDialog()
+  const { alert, confirm, DialogComponent } = useDialog()
   const [products, setProducts] = useState<ProductWithCategory[]>([])
   const [categories, setCategories] = useState<Category[]>([])
   const [loading, setLoading] = useState(true)
@@ -96,13 +96,27 @@ export default function ProductsPage() {
 
   const handleDeleteProduct = async () => {
     if (!currentProduct) return
-    if (!confirm(`¿Estás seguro de que deseas eliminar "${currentProduct.name}"?`)) return
+    
+    const confirmed = await confirm({
+      title: 'Eliminar Producto',
+      message: `¿Estás seguro de que deseas eliminar "${currentProduct.name}"?`,
+      type: 'warning',
+      confirmText: 'Eliminar',
+      cancelText: 'Cancelar'
+    })
+    
+    if (!confirmed) return
 
     try {
       await productService.delete(currentProduct.id)
       await loadData()
       notifyProductsUpdated()
       closeModal()
+      await alert({
+        title: 'Producto Eliminado',
+        message: 'El producto se ha eliminado correctamente',
+        type: 'success'
+      })
     } catch (error) {
       console.error('Error deleting product:', error)
       alert({

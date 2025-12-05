@@ -265,8 +265,7 @@ export default function ListDetailPage() {
     return sortedGroups
   }, [items])
 
-  // Split items into checked and unchecked for shopping mode
-  const uncheckedItems = useMemo(() => items.filter((i) => !i.checked), [items])
+  // Get checked items for shopping mode
   const checkedItems = useMemo(() => items.filter((i) => i.checked), [items])
 
   // Calculate total spent
@@ -421,9 +420,29 @@ export default function ListDetailPage() {
                 </div>
               )}
             </div>
+          </>
+        )}
 
-            {/* Items List */}
-            {groupedItems.length === 0 ? (
+        {/* Items List - Always shown */}
+        {/* Shopping Mode - Total Badge */}
+        {isShoppingMode && checkedItems.length > 0 && (
+          <div className="bg-gradient-to-r from-green-500 to-green-600 text-white rounded-lg p-4 shadow-lg mb-6">
+            <div className="flex items-center justify-between">
+              <div>
+                <div className="text-sm opacity-90">Total gastado</div>
+                <div className="text-3xl font-bold">{totalSpent.toFixed(2)}€</div>
+              </div>
+              <div className="text-right">
+                <div className="text-sm opacity-90">Comprados</div>
+                <div className="text-2xl font-bold">
+                  {checkedItems.length}/{items.length}
+                </div>
+              </div>
+            </div>
+          </div>
+        )}
+
+        {groupedItems.length === 0 ? (
               <div className="text-center py-12">
                 <ShoppingCart className="w-16 h-16 mx-auto text-secondary-300 mb-4" />
                 <p className="text-secondary-600">No hay productos en la lista</p>
@@ -439,149 +458,117 @@ export default function ListDetailPage() {
                       {group.categoryName}
                     </h3>
                     <div className="bg-white rounded-lg border border-secondary-200 divide-y divide-secondary-100">
-                      {group.items.map((item) => (
-                        <div
-                          key={item.id}
-                          className="flex items-center justify-between px-4 py-3 hover:bg-secondary-50 transition-colors"
-                        >
-                          <div className="flex-1">
-                            <div className="font-medium text-secondary-900">
-                              {item.quantity > 1 && (
-                                <span className="text-primary-600 mr-2">{item.quantity}</span>
-                              )}
-                              {item.name}
-                            </div>
-                            {item.estimated_price && (
-                              <div className="text-sm text-secondary-500">
-                                ~{item.estimated_price.toFixed(2)}€/ud
-                              </div>
+                      {group.items.map((item) => {
+                        const isChecked = checkedItems.some(ci => ci.id === item.id)
+                        
+                        // In shopping mode, only show unchecked items
+                        if (isShoppingMode && isChecked) {
+                          return null
+                        }
+                        
+                        return (
+                          <div
+                            key={item.id}
+                            className="flex items-center justify-between px-4 py-3 hover:bg-secondary-50 transition-colors"
+                          >
+                            {isShoppingMode ? (
+                              // Shopping mode - clickable to mark as bought
+                              <button
+                                onClick={() => handleToggleChecked(item, true)}
+                                className="flex-1 text-left -mx-4 px-4 py-2"
+                              >
+                                <div className="font-medium text-secondary-900">
+                                  {item.quantity > 1 && (
+                                    <span className="text-primary-600 mr-2">{item.quantity}</span>
+                                  )}
+                                  {item.name}
+                                </div>
+                                {item.estimated_price && (
+                                  <div className="text-sm text-secondary-500">
+                                    ~{(item.estimated_price * item.quantity).toFixed(2)}€
+                                  </div>
+                                )}
+                              </button>
+                            ) : (
+                              // Edit mode - show with delete button
+                              <>
+                                <div className="flex-1">
+                                  <div className="font-medium text-secondary-900">
+                                    {item.quantity > 1 && (
+                                      <span className="text-primary-600 mr-2">{item.quantity}</span>
+                                    )}
+                                    {item.name}
+                                  </div>
+                                  {item.estimated_price && (
+                                    <div className="text-sm text-secondary-500">
+                                      ~{item.estimated_price.toFixed(2)}€/ud
+                                    </div>
+                                  )}
+                                </div>
+                                <div className="flex items-center gap-2">
+                                  <button
+                                    onClick={() => handleDeleteItem(item.id, item.name)}
+                                    className="p-2 text-red-600 hover:bg-red-50 rounded-lg transition-colors"
+                                  >
+                                    <Trash2 className="w-4 h-4" />
+                                  </button>
+                                </div>
+                              </>
+                            )}
+                            {isShoppingMode && (
+                              <button
+                                onClick={() => handleOpenEditModal(item)}
+                                className="p-2 text-secondary-400 hover:text-secondary-600 hover:bg-secondary-100 rounded-lg transition-colors"
+                              >
+                                <Edit2 className="w-4 h-4" />
+                              </button>
                             )}
                           </div>
-                          <div className="flex items-center gap-2">
-                            <button
-                              onClick={() => handleDeleteItem(item.id, item.name)}
-                              className="p-2 text-red-600 hover:bg-red-50 rounded-lg transition-colors"
-                            >
-                              <Trash2 className="w-4 h-4" />
-                            </button>
-                          </div>
-                        </div>
-                      ))}
+                        )
+                      })}
                     </div>
                   </div>
                 ))}
               </div>
             )}
-          </>
-        )}
 
-        {/* Shopping Mode */}
-        {isShoppingMode && (
-          <div className="space-y-6">
-            {/* Total Badge */}
-            {checkedItems.length > 0 && (
-              <div className="bg-gradient-to-r from-green-500 to-green-600 text-white rounded-lg p-4 shadow-lg">
-                <div className="flex items-center justify-between">
-                  <div>
-                    <div className="text-sm opacity-90">Total gastado</div>
-                    <div className="text-3xl font-bold">{totalSpent.toFixed(2)}€</div>
-                  </div>
-                  <div className="text-right">
-                    <div className="text-sm opacity-90">Comprados</div>
-                    <div className="text-2xl font-bold">
-                      {checkedItems.length}/{items.length}
-                    </div>
-                  </div>
-                </div>
-              </div>
-            )}
-
-            {/* Unchecked Items (Por Comprar) */}
-            {uncheckedItems.length > 0 && (
-              <div>
-                <h2 className="text-lg font-bold text-secondary-900 mb-3 px-2">
-                  Por comprar ({uncheckedItems.length})
-                </h2>
-                <div className="bg-white rounded-lg border border-secondary-200 divide-y divide-secondary-100">
-                  {uncheckedItems.map((item) => (
-                    <div key={item.id} className="flex items-center gap-3 px-4 py-3">
-                      <button
-                        onClick={() => handleToggleChecked(item, true)}
-                        className="flex-1 text-left hover:bg-secondary-50 -mx-4 px-4 py-2 transition-colors"
-                      >
-                        <div className="font-medium text-secondary-900">
-                          {item.quantity > 1 && (
-                            <span className="text-primary-600 mr-2">{item.quantity}</span>
-                          )}
-                          {item.name}
-                        </div>
-                        {item.estimated_price && (
-                          <div className="text-sm text-secondary-500">
-                            ~{(item.estimated_price * item.quantity).toFixed(2)}€
-                          </div>
+        {/* Shopping Mode - Already Bought Items */}
+        {isShoppingMode && checkedItems.length > 0 && (
+          <div className="mt-6">
+            <h2 className="text-lg font-bold text-secondary-900 mb-3 px-2">
+              Ya comprados ({checkedItems.length})
+            </h2>
+            <div className="bg-white rounded-lg border border-secondary-200 divide-y divide-secondary-100 opacity-75">
+              {checkedItems.map((item) => (
+                <div key={item.id} className="flex items-center gap-3 px-4 py-3">
+                  <button
+                    onClick={() => handleToggleChecked(item, false)}
+                    className="flex items-center gap-3 flex-1 text-left hover:bg-secondary-50 -mx-4 px-4 py-2 transition-colors"
+                  >
+                    <Check className="w-5 h-5 text-green-600 flex-shrink-0" />
+                    <div className="flex-1">
+                      <div className="font-medium text-secondary-700 line-through">
+                        {item.quantity > 1 && (
+                          <span className="text-secondary-500 mr-2">{item.quantity}</span>
                         )}
-                      </button>
-                      <button
-                        onClick={() => handleOpenEditModal(item)}
-                        className="p-2 text-secondary-400 hover:text-secondary-600 hover:bg-secondary-100 rounded-lg transition-colors"
-                      >
-                        <Edit2 className="w-4 h-4" />
-                      </button>
-                    </div>
-                  ))}
-                </div>
-              </div>
-            )}
-
-            {/* Checked Items (Ya Comprados) */}
-            {checkedItems.length > 0 && (
-              <div>
-                <h2 className="text-lg font-bold text-secondary-900 mb-3 px-2">
-                  Ya comprados ({checkedItems.length})
-                </h2>
-                <div className="bg-white rounded-lg border border-secondary-200 divide-y divide-secondary-100 opacity-75">
-                  {checkedItems.map((item) => (
-                    <div key={item.id} className="flex items-center gap-3 px-4 py-3">
-                      <button
-                        onClick={() => handleToggleChecked(item, false)}
-                        className="flex items-center gap-3 flex-1 text-left hover:bg-secondary-50 -mx-4 px-4 py-2 transition-colors"
-                      >
-                        <Check className="w-5 h-5 text-green-600 flex-shrink-0" />
-                        <div className="flex-1">
-                          <div className="font-medium text-secondary-700 line-through">
-                            {item.quantity > 1 && (
-                              <span className="text-secondary-500 mr-2">{item.quantity}</span>
-                            )}
-                            {item.name}
-                          </div>
-                          {(item.actual_price || item.estimated_price) && (
-                            <div className="text-sm text-secondary-500">
-                              {((item.actual_price || item.estimated_price || 0) * item.quantity).toFixed(
-                                2
-                              )}
-                              €
-                            </div>
-                          )}
+                        {item.name}
+                      </div>
+                      {(item.actual_price || item.estimated_price) && (
+                        <div className="text-sm text-secondary-500">
+                          {((item.actual_price || item.estimated_price || 0) * item.quantity).toFixed(2)}€
                         </div>
-                      </button>
-                      <button
-                        onClick={() => handleOpenEditModal(item)}
-                        className="p-2 text-secondary-400 hover:text-secondary-600 hover:bg-secondary-100 rounded-lg transition-colors"
-                      >
-                        <Edit2 className="w-4 h-4" />
-                      </button>
+                      )}
                     </div>
-                  ))}
+                  </button>
+                  <button
+                    onClick={() => handleOpenEditModal(item)}
+                    className="p-2 text-secondary-400 hover:text-secondary-600 hover:bg-secondary-100 rounded-lg transition-colors"
+                  >
+                    <Edit2 className="w-4 h-4" />
+                  </button>
                 </div>
-              </div>
-            )}
-
-            {items.length === 0 && (
-              <div className="text-center py-12">
-                <ShoppingCart className="w-16 h-16 mx-auto text-secondary-300 mb-4" />
-                <p className="text-secondary-600">No hay productos en la lista</p>
-              </div>
-            )}
+              ))}
+            </div>
           </div>
         )}
       </div>

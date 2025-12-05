@@ -174,7 +174,7 @@ export class ShoppingListService {
         product:products(
           id,
           name,
-          alias,
+          aliases,
           category:categories(id, name, icon, color)
         )
       `)
