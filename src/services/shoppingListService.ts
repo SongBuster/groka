@@ -296,6 +296,88 @@ export class ShoppingListService {
       progress
     }
   }
+
+  /**
+   * Update estimated prices for shopping list items based on latest ticket prices
+   */
+  async updatePricesFromTickets(listId: string, userId: string): Promise<void> {
+    try {
+      // Get all items in the shopping list
+      const { data: listItems, error: itemsError } = await supabase
+        .from('shopping_list_items')
+        .select('id, product_id, name, estimated_price')
+        .eq('list_id', listId)
+
+      if (itemsError) throw itemsError
+
+      if (!listItems || listItems.length === 0) return
+
+      // Get all tickets for this user
+      const { data: tickets, error: ticketsError } = await supabase
+        .from('tickets')
+        .select('id')
+        .eq('user_id', userId)
+
+      if (ticketsError) throw ticketsError
+
+      if (!tickets || tickets.length === 0) return
+
+      const ticketIds = (tickets as any[]).map(t => t.id)
+
+      // For each list item, find the latest price from ticket items
+      for (const item of (listItems as any[])) {
+        // Skip if already has an estimated price
+        if (item.estimated_price) continue
+
+        let latestPrice: number | null = null
+
+        // Search by product_id if available
+        if (item.product_id) {
+          const { data: ticketItems } = await supabase
+            .from('ticket_items')
+            .select('unit_price, created_at')
+            .eq('product_id', item.product_id)
+            .in('ticket_id', ticketIds)
+            .order('created_at', { ascending: false })
+            .limit(1)
+
+          if (ticketItems && (ticketItems as any[]).length > 0 && (ticketItems as any[])[0].unit_price) {
+            latestPrice = (ticketItems as any[])[0].unit_price
+          }
+        }
+
+        // If not found by product_id, search by name (case-insensitive)
+        if (!latestPrice) {
+          const { data: ticketItems } = await supabase
+            .from('ticket_items')
+            .select('unit_price, created_at')
+            .ilike('name', `%${item.name}%`)
+            .in('ticket_id', ticketIds)
+            .order('created_at', { ascending: false })
+            .limit(1)
+
+          if (ticketItems && (ticketItems as any[]).length > 0 && (ticketItems as any[])[0].unit_price) {
+            latestPrice = (ticketItems as any[])[0].unit_price
+          }
+        }
+
+        // Update the item if we found a price
+        if (latestPrice) {
+          const { error: updateError } = await (supabase as any)
+            .from('shopping_list_items')
+            .update({ estimated_price: latestPrice })
+            .eq('id', item.id)
+
+          if (updateError) {
+            console.error(`Failed to update price for item ${item.id}:`, updateError)
+          }
+        }
+      }
+    } catch (error) {
+      console.error('Error updating prices from tickets:', error)
+      throw error
+    }
+  }
 }
 
 export default new ShoppingListService()

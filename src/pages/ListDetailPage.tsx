@@ -10,13 +10,13 @@ import {
   Edit2,
   Trash2,
   Loader2,
-  ChevronDown,
-  ChevronUp,
 } from 'lucide-react'
 import shoppingListService from '../services/shoppingListService'
 import productService from '../services/productService'
 import type { ProductWithCategory } from '../services/productService'
 import { useDialog } from '../hooks/useDialog'
+import NumericKeyboardModal from '../components/NumericKeyboardModal'
+import ShoppingItemEditModal from '../components/ShoppingItemEditModal'
 import type { Database } from '../types/database'
 
 type ShoppingList = Database['public']['Tables']['shopping_lists']['Row']
@@ -42,17 +42,22 @@ export default function ListDetailPage() {
   const [isShoppingMode, setIsShoppingMode] = useState(false)
 
   // Add product state
-  const [showAddProduct, setShowAddProduct] = useState(false)
   const [searchQuery, setSearchQuery] = useState('')
   const [searchResults, setSearchResults] = useState<ProductWithCategory[]>([])
   const [searchLoading, setSearchLoading] = useState(false)
   const [newProductQuantity, setNewProductQuantity] = useState(1)
+  const [showQuantityModal, setShowQuantityModal] = useState(false)
 
   // Edit item modal state
   const [editingItem, setEditingItem] = useState<ShoppingListItem | null>(null)
   const [editQuantity, setEditQuantity] = useState(1)
   const [editWeight, setEditWeight] = useState<number | null>(null)
   const [editPrice, setEditPrice] = useState<number | null>(null)
+
+  // Shopping mode item edit modal state
+  const [shoppingEditingItem, setShoppingEditingItem] = useState<ShoppingListItem | null>(null)
+
+
 
   useEffect(() => {
     if (id && user) {
@@ -150,7 +155,6 @@ export default function ListDetailPage() {
       })
 
       await loadItems()
-      setShowAddProduct(false)
       setSearchQuery('')
       setSearchResults([])
       setNewProductQuantity(1)
@@ -226,6 +230,40 @@ export default function ListDetailPage() {
       await alert({
         title: 'Error',
         message: 'No se pudo eliminar el producto',
+        type: 'error',
+      })
+    }
+  }
+
+  const handleToggleShoppingMode = async () => {
+    if (!isShoppingMode && user && list) {
+      // Entering shopping mode - update prices from tickets
+      try {
+        await shoppingListService.updatePricesFromTickets(list.id, user.id)
+        await loadItems()
+      } catch (error) {
+        console.error('Error updating prices from tickets:', error)
+      }
+    }
+    setIsShoppingMode(!isShoppingMode)
+  }
+
+  const handleShoppingItemConfirm = async (updates: {
+    quantity?: number
+    weight?: number | null
+    actual_price?: number | null
+  }) => {
+    if (!shoppingEditingItem) return
+
+    try {
+      await shoppingListService.updateItem(shoppingEditingItem.id, updates)
+      await loadItems()
+      setShoppingEditingItem(null)
+    } catch (error) {
+      console.error('Error updating item:', error)
+      await alert({
+        title: 'Error',
+        message: 'No se pudo actualizar el producto',
         type: 'error',
       })
     }
@@ -309,7 +347,7 @@ export default function ListDetailPage() {
             </button>
 
             <button
-              onClick={() => setIsShoppingMode(!isShoppingMode)}
+              onClick={handleToggleShoppingMode}
               className={`flex items-center gap-2 px-4 py-2 rounded-lg font-medium transition-colors ${
                 isShoppingMode
                   ? 'bg-secondary-100 text-secondary-700'
@@ -334,25 +372,7 @@ export default function ListDetailPage() {
           <>
             {/* Add Product Section */}
             <div className="bg-white rounded-lg border border-secondary-200 p-4 mb-6">
-              <button
-                onClick={() => setShowAddProduct(!showAddProduct)}
-                className="w-full flex items-center justify-between text-left"
-              >
-                <div className="flex items-center gap-3">
-                  <div className="w-10 h-10 rounded-lg bg-primary-100 flex items-center justify-center">
-                    <Plus className="w-5 h-5 text-primary-600" />
-                  </div>
-                  <span className="font-medium text-secondary-900">Añadir producto</span>
-                </div>
-                {showAddProduct ? (
-                  <ChevronUp className="w-5 h-5 text-secondary-400" />
-                ) : (
-                  <ChevronDown className="w-5 h-5 text-secondary-400" />
-                )}
-              </button>
-
-              {showAddProduct && (
-                <div className="mt-4 space-y-4">
+              <div className="space-y-4">
                   <div className="flex gap-2">
                     <input
                       type="text"
@@ -362,14 +382,12 @@ export default function ListDetailPage() {
                       className="flex-1 px-4 py-2 border border-secondary-300 rounded-lg focus:ring-2 focus:ring-primary-500 focus:border-transparent"
                       autoFocus
                     />
-                    <input
-                      type="number"
-                      min="1"
-                      value={newProductQuantity}
-                      onChange={(e) => setNewProductQuantity(parseInt(e.target.value) || 1)}
-                      className="w-20 px-3 py-2 border border-secondary-300 rounded-lg focus:ring-2 focus:ring-primary-500 focus:border-transparent text-center"
-                      placeholder="Cant."
-                    />
+                    <button
+                      onClick={() => setShowQuantityModal(true)}
+                      className="w-20 px-3 py-2 border border-secondary-300 rounded-lg hover:bg-secondary-50 focus:ring-2 focus:ring-primary-500 focus:border-transparent text-center font-medium text-secondary-700 transition-colors"
+                    >
+                      {newProductQuantity}
+                    </button>
                   </div>
 
                   {/* Search Results */}
@@ -417,8 +435,7 @@ export default function ListDetailPage() {
                       </div>
                     </button>
                   )}
-                </div>
-              )}
+              </div>
             </div>
           </>
         )}
@@ -472,23 +489,31 @@ export default function ListDetailPage() {
                             className="flex items-center justify-between px-4 py-3 hover:bg-secondary-50 transition-colors"
                           >
                             {isShoppingMode ? (
-                              // Shopping mode - clickable to mark as bought
-                              <button
-                                onClick={() => handleToggleChecked(item, true)}
-                                className="flex-1 text-left -mx-4 px-4 py-2"
-                              >
-                                <div className="font-medium text-secondary-900">
-                                  {item.quantity > 1 && (
-                                    <span className="text-primary-600 mr-2">{item.quantity}</span>
-                                  )}
-                                  {item.name}
-                                </div>
-                                {item.estimated_price && (
-                                  <div className="text-sm text-secondary-500">
-                                    ~{(item.estimated_price * item.quantity).toFixed(2)}€
+                              // Shopping mode - clickable to mark as bought with edit button
+                              <div className="flex items-center gap-3 flex-1">
+                                <button
+                                  onClick={() => handleToggleChecked(item, true)}
+                                  className="flex-1 text-left -mx-4 px-4 py-2"
+                                >
+                                  <div className="font-medium text-secondary-900">
+                                    {item.quantity > 1 && (
+                                      <span className="text-primary-600 mr-2">{item.quantity}</span>
+                                    )}
+                                    {item.name}
                                   </div>
-                                )}
-                              </button>
+                                  {item.estimated_price && (
+                                    <div className="text-sm text-secondary-500">
+                                      ~{(item.estimated_price * item.quantity).toFixed(2)}€
+                                    </div>
+                                  )}
+                                </button>
+                                <button
+                                  onClick={() => setShoppingEditingItem(item)}
+                                  className="p-2 text-secondary-400 hover:text-secondary-600 hover:bg-secondary-100 rounded-lg transition-colors"
+                                >
+                                  <Edit2 className="w-4 h-4" />
+                                </button>
+                              </div>
                             ) : (
                               // Edit mode - show with delete button
                               <>
@@ -514,14 +539,6 @@ export default function ListDetailPage() {
                                   </button>
                                 </div>
                               </>
-                            )}
-                            {isShoppingMode && (
-                              <button
-                                onClick={() => handleOpenEditModal(item)}
-                                className="p-2 text-secondary-400 hover:text-secondary-600 hover:bg-secondary-100 rounded-lg transition-colors"
-                              >
-                                <Edit2 className="w-4 h-4" />
-                              </button>
                             )}
                           </div>
                         )
@@ -669,6 +686,25 @@ export default function ListDetailPage() {
           </div>
         </div>
       )}
+
+      {/* Numeric Keyboard Modal for Product Quantity */}
+      <NumericKeyboardModal
+        isOpen={showQuantityModal}
+        value={newProductQuantity}
+        onClose={() => setShowQuantityModal(false)}
+        onConfirm={(value) => setNewProductQuantity(value)}
+        title="Cantidad de productos"
+        minValue={1}
+        maxValue={999}
+      />
+
+      {/* Shopping Mode Item Edit Modal */}
+      <ShoppingItemEditModal
+        isOpen={!!shoppingEditingItem}
+        item={shoppingEditingItem}
+        onClose={() => setShoppingEditingItem(null)}
+        onConfirm={handleShoppingItemConfirm}
+      />
     </div>
   )
 }
