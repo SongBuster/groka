@@ -220,42 +220,44 @@ export default function ShoppingListsPage() {
         </button>
       </div>
 
-      {/* Filters */}
-      <div className="bg-white rounded-xl p-6 shadow-md border border-secondary-200 mb-6">
-        <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-          <div>
-            <label className="block text-sm font-medium text-secondary-700 mb-1">
-              Estado
-            </label>
-            <CustomSelect
-              options={[
-                { value: 'active', label: 'Activas' },
-                { value: 'completed', label: 'Completadas' },
-                { value: 'all', label: 'Todas' }
-              ]}
-              value={filterStatus}
-              onChange={setFilterStatus}
-            />
-          </div>
-          <div>
-            <label className="block text-sm font-medium text-secondary-700 mb-1">
-              Supermercado
-            </label>
-            <CustomSelect
-              options={[
-                { value: '', label: 'Todos los supermercados' },
-                ...supermarkets.map(sm => ({
-                  value: sm.id,
-                  label: sm.name
-                }))
-              ]}
-              value={filterSupermarket}
-              onChange={setFilterSupermarket}
-              placeholder="Todos los supermercados"
-            />
+      {/* Filters - Temporarily hidden */}
+      {false && (
+        <div className="bg-white rounded-xl p-6 shadow-md border border-secondary-200 mb-6">
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+            <div>
+              <label className="block text-sm font-medium text-secondary-700 mb-1">
+                Estado
+              </label>
+              <CustomSelect
+                options={[
+                  { value: 'active', label: 'Activas' },
+                  { value: 'completed', label: 'Completadas' },
+                  { value: 'all', label: 'Todas' }
+                ]}
+                value={filterStatus}
+                onChange={setFilterStatus}
+              />
+            </div>
+            <div>
+              <label className="block text-sm font-medium text-secondary-700 mb-1">
+                Supermercado
+              </label>
+              <CustomSelect
+                options={[
+                  { value: '', label: 'Todos los supermercados' },
+                  ...supermarkets.map(sm => ({
+                    value: sm.id,
+                    label: sm.name
+                  }))
+                ]}
+                value={filterSupermarket}
+                onChange={setFilterSupermarket}
+                placeholder="Todos los supermercados"
+              />
+            </div>
           </div>
         </div>
-      </div>
+      )}
 
       {/* Lists Grid */}
       {loading ? (

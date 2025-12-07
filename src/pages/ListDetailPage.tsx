@@ -40,6 +40,7 @@ export default function ListDetailPage() {
   const [items, setItems] = useState<ShoppingListItem[]>([])
   const [loading, setLoading] = useState(true)
   const [isShoppingMode, setIsShoppingMode] = useState(false)
+  const [shoppingModeLoading, setShoppingModeLoading] = useState(false)
 
   // Add product state
   const [searchQuery, setSearchQuery] = useState('')
@@ -184,10 +185,15 @@ export default function ListDetailPage() {
   }
 
   const handleOpenEditModal = (item: ShoppingListItem) => {
-    setEditingItem(item)
-    setEditQuantity(item.quantity)
-    setEditWeight(item.weight)
-    setEditPrice(item.actual_price)
+    // In shopping mode, use the new numeric keyboard modal
+    if (isShoppingMode) {
+      setShoppingEditingItem(item)
+    } else {
+      setEditingItem(item)
+      setEditQuantity(item.quantity)
+      setEditWeight(item.weight)
+      setEditPrice(item.actual_price)
+    }
   }
 
   const handleSaveEdit = async () => {
@@ -238,11 +244,14 @@ export default function ListDetailPage() {
   const handleToggleShoppingMode = async () => {
     if (!isShoppingMode && user && list) {
       // Entering shopping mode - update prices from tickets
+      setShoppingModeLoading(true)
       try {
         await shoppingListService.updatePricesFromTickets(list.id, user.id)
         await loadItems()
       } catch (error) {
         console.error('Error updating prices from tickets:', error)
+      } finally {
+        setShoppingModeLoading(false)
       }
     }
     setIsShoppingMode(!isShoppingMode)
@@ -348,14 +357,21 @@ export default function ListDetailPage() {
 
             <button
               onClick={handleToggleShoppingMode}
+              disabled={shoppingModeLoading}
               className={`flex items-center gap-2 px-4 py-2 rounded-lg font-medium transition-colors ${
                 isShoppingMode
                   ? 'bg-secondary-100 text-secondary-700'
+                  : shoppingModeLoading
+                  ? 'bg-primary-400 text-white cursor-not-allowed'
                   : 'bg-primary-600 text-white hover:bg-primary-700'
               }`}
             >
-              <ShoppingCart className="w-5 h-5" />
-              {isShoppingMode ? 'Editar lista' : 'Ir a comprar'}
+              {shoppingModeLoading ? (
+                <Loader2 className="w-5 h-5 animate-spin" />
+              ) : (
+                <ShoppingCart className="w-5 h-5" />
+              )}
+              {isShoppingMode ? 'Editar lista' : shoppingModeLoading ? 'Cargando...' : 'Ir a comprar'}
             </button>
           </div>
 
@@ -468,10 +484,10 @@ export default function ListDetailPage() {
                 </p>
               </div>
             ) : (
-              <div className="space-y-6">
+              <div className="space-y-4">
                 {groupedItems.map((group) => (
                   <div key={group.categoryId || 'uncategorized'}>
-                    <h3 className="font-semibold text-secondary-700 mb-3 px-2">
+                    <h3 className="font-semibold text-secondary-700 mb-2 px-2 text-sm">
                       {group.categoryName}
                     </h3>
                     <div className="bg-white rounded-lg border border-secondary-200 divide-y divide-secondary-100">
@@ -486,14 +502,14 @@ export default function ListDetailPage() {
                         return (
                           <div
                             key={item.id}
-                            className="flex items-center justify-between px-4 py-3 hover:bg-secondary-50 transition-colors"
+                            className="flex items-center justify-between px-3 py-2 hover:bg-secondary-50 transition-colors"
                           >
                             {isShoppingMode ? (
                               // Shopping mode - clickable to mark as bought with edit button
-                              <div className="flex items-center gap-3 flex-1">
+                              <div className="flex items-center gap-2 flex-1">
                                 <button
                                   onClick={() => handleToggleChecked(item, true)}
-                                  className="flex-1 text-left -mx-4 px-4 py-2"
+                                  className="flex-1 text-left -mx-3 px-3 py-1"
                                 >
                                   <div className="font-medium text-secondary-900">
                                     {item.quantity > 1 && (
@@ -502,15 +518,14 @@ export default function ListDetailPage() {
                                     {item.name}
                                   </div>
                                   {item.estimated_price && (
-                                    <div className="text-sm text-secondary-500">
+                                    <div className="text-xs text-secondary-500">
                                       ~{(item.estimated_price * item.quantity).toFixed(2)}€
                                     </div>
                                   )}
                                 </button>
                                 <button
                                   onClick={() => setShoppingEditingItem(item)}
-                                  className="p-2 text-secondary-400 hover:text-secondary-600 hover:bg-secondary-100 rounded-lg transition-colors"
-                                >
+                                  className="p-1.5 text-secondary-400 hover:text-secondary-600 hover:bg-secondary-100 rounded-lg transition-colors">
                                   <Edit2 className="w-4 h-4" />
                                 </button>
                               </div>
@@ -551,18 +566,18 @@ export default function ListDetailPage() {
 
         {/* Shopping Mode - Already Bought Items */}
         {isShoppingMode && checkedItems.length > 0 && (
-          <div className="mt-6">
-            <h2 className="text-lg font-bold text-secondary-900 mb-3 px-2">
+          <div className="mt-4">
+            <h2 className="text-sm font-bold text-secondary-900 mb-2 px-2">
               Ya comprados ({checkedItems.length})
             </h2>
             <div className="bg-white rounded-lg border border-secondary-200 divide-y divide-secondary-100 opacity-75">
               {checkedItems.map((item) => (
-                <div key={item.id} className="flex items-center gap-3 px-4 py-3">
+                <div key={item.id} className="flex items-center gap-2 px-3 py-2">
                   <button
                     onClick={() => handleToggleChecked(item, false)}
-                    className="flex items-center gap-3 flex-1 text-left hover:bg-secondary-50 -mx-4 px-4 py-2 transition-colors"
+                    className="flex items-center gap-2 flex-1 text-left hover:bg-secondary-50 -mx-3 px-3 py-1 transition-colors"
                   >
-                    <Check className="w-5 h-5 text-green-600 flex-shrink-0" />
+                    <Check className="w-4 h-4 text-green-600 flex-shrink-0" />
                     <div className="flex-1">
                       <div className="font-medium text-secondary-700 line-through">
                         {item.quantity > 1 && (
@@ -571,7 +586,7 @@ export default function ListDetailPage() {
                         {item.name}
                       </div>
                       {(item.actual_price || item.estimated_price) && (
-                        <div className="text-sm text-secondary-500">
+                        <div className="text-xs text-secondary-500">
                           {((item.actual_price || item.estimated_price || 0) * item.quantity).toFixed(2)}€
                         </div>
                       )}
@@ -579,9 +594,9 @@ export default function ListDetailPage() {
                   </button>
                   <button
                     onClick={() => handleOpenEditModal(item)}
-                    className="p-2 text-secondary-400 hover:text-secondary-600 hover:bg-secondary-100 rounded-lg transition-colors"
+                    className="p-1.5 text-secondary-400 hover:text-secondary-600 hover:bg-secondary-100 rounded-lg transition-colors"
                   >
-                    <Edit2 className="w-4 h-4" />
+                    <Edit2 className="w-3.5 h-3.5" />
                   </button>
                 </div>
               ))}
