@@ -350,14 +350,8 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
             const blob = new Blob([new Uint8Array(pdfBuffer)], { type: 'application/pdf' })
             const file = new File([blob], attachment.filename, { type: 'application/pdf' })
 
-            // Parse PDF (try server-side). If unavailable, fallback to store as pending
-            let parsed: any = null
-            try {
-              const serverParser = await import('../lib/server-pdf-parser')
-              parsed = await serverParser.parseTicketFromBuffer(pdfBuffer)
-            } catch (parseImportError: any) {
-              console.warn('Server-side parser not available, storing as pending:', parseImportError?.message)
-            }
+            // Do not parse server-side: store as pending to be parsed in-app
+            const parsed: any = null
 
             // Upload PDF to Supabase Storage (sanitize filename to avoid invalid keys)
             const sanitizeObjectKey = (name: string): string => {
@@ -404,7 +398,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
                 purchase_date: parsed?.date || null,
                 total_amount: parsed?.totalFromPDF || parsed?.totalAmount || null,
                 parsed: !!parsed,
-                parsing_error: parsed ? null : 'Server-side parser unavailable or unrecognized format. Please parse in app.',
+                parsing_error: 'Pending parse in app',
               })
               .select()
               .single()
