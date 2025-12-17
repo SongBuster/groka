@@ -359,8 +359,28 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
               console.warn('Server-side parser not available, storing as pending:', parseImportError?.message)
             }
 
-            // Upload PDF to Supabase Storage
-            const fileName = `${authUser.id}/${Date.now()}_${attachment.filename}`
+            // Upload PDF to Supabase Storage (sanitize filename to avoid invalid keys)
+            const sanitizeObjectKey = (name: string): string => {
+              const trimmed = (name || '').trim()
+              const dotIdx = trimmed.lastIndexOf('.')
+              const base = dotIdx !== -1 ? trimmed.slice(0, dotIdx) : trimmed
+              const ext = dotIdx !== -1 ? trimmed.slice(dotIdx) : ''
+              // Remove diacritics and replace any non-safe chars with '-'
+              const normalizedBase = base
+                .normalize('NFKD')
+                .replace(/[\u0300-\u036f]/g, '')
+              const safeBase = normalizedBase
+                .replace(/[^a-zA-Z0-9._-]+/g, '-')
+                .replace(/-+/g, '-')
+                .replace(/^-|-$/g, '')
+              const safeExt = (ext.toLowerCase() || '.pdf').replace(/[^a-z0-9.]/g, '')
+              const finalName = `${safeBase || 'ticket'}${safeExt || '.pdf'}`
+              // Prevent overly long names
+              return finalName.length > 128 ? finalName.slice(0, 120) + '.pdf' : finalName
+            }
+
+            const sanitizedFileName = sanitizeObjectKey(attachment.filename)
+            const fileName = `${authUser.id}/${Date.now()}_${sanitizedFileName}`
             const { data: uploadData, error: uploadError } = await supabase.storage
               .from('tickets')
               .upload(fileName, pdfBuffer, {
