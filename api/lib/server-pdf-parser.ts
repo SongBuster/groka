@@ -64,8 +64,12 @@ export async function parseTicketFromBuffer(buffer: Buffer): Promise<ParsedTicke
   const date = extractDate(text)
   const total = extractTotal(text)
 
-  // Very light parsing: we return header-level info.
-  // Items parsing can be added per-supermarket with regexes.
+  // Try per-supermarket item parsing (Mercadona first)
+  const products: ParsedTicket['products'] = store?.includes('MERCADONA')
+    ? parseMercadonaItems(text)
+    : []
+
+  // Very light parsing: header + optional items
   const parsed: ParsedTicket = {
     supermarketId: null,
     invoiceNumber: null,
@@ -73,8 +77,94 @@ export async function parseTicketFromBuffer(buffer: Buffer): Promise<ParsedTicke
     date: date || null,
     totalFromPDF: total ?? null,
     totalAmount: total ?? null,
-    products: [],
+    products,
   }
 
   return parsed
+}
+
+function looksLikeHeaderOrFooter(line: string): boolean {
+  const l = line.trim().toUpperCase()
+  if (!l) return true
+  return (
+    l.includes('TOTAL') ||
+    l.includes('BASE') ||
+    l.includes('IVA') ||
+    l.includes('NIF') ||
+    l.includes('CIF') ||
+    l.includes('TICKET') ||
+    l.includes('FACTURA') ||
+    l.includes('TPV') ||
+    l.includes('CAJA') ||
+    l.includes('HORA') ||
+    /^\d{2}[\/\-]\d{2}[\/\-]\d{4}$/.test(l)
+  )
+}
+
+function normalizeText(text: string): string[] {
+  return text
+    .split(/\r?\n/)
+    .map(l => l.replace(/[\t\u00A0]+/g, ' ').replace(/\s{2,}/g, ' ').trim())
+    .filter(l => l.length > 0)
+}
+
+function parseMercadonaItems(text: string): ParsedTicket['products'] {
+  const lines = normalizeText(text)
+  const items: ParsedTicket['products'] = []
+
+  const qtyUnitPriceTotal = /^(?<qty>[0-9]+(?:[.,][0-9]+)?)\s*(?<unit>kg|ud|u|l)?\s*x\s*(?<unitPrice>[0-9]+(?:[.,][0-9]+)?)\s*(?:€|eur|e)?\s*(?<total>[0-9]+(?:[.,][0-9]+)?)\s*(?:€|eur|e)?$/i
+  const inlinePattern = /^(?<name>.+?)\s+(?<qty>[0-9]+(?:[.,][0-9]+)?)\s*(?<unit>kg|ud|u|l)?\s*x\s*(?<unitPrice>[0-9]+(?:[.,][0-9]+)?)\s*(?:€|eur|e)?\s*(?<total>[0-9]+(?:[.,][0-9]+)?)\s*(?:€|eur|e)?$/i
+  const trailingTotalPattern = /^(?<name>.+?)\s+(?<total>[0-9]+(?:[.,][0-9]+)?)\s*(?:€|eur|e)?$/i
+
+  for (let i = 0; i < lines.length; i++) {
+    const line = lines[i]
+    if (looksLikeHeaderOrFooter(line)) continue
+
+    // Case 1: inline "NAME qty x unitPrice total"
+    let m = line.match(inlinePattern)
+    if (m && m.groups) {
+      const name = m.groups.name.trim()
+      const qty = toNumber(m.groups.qty)
+      const unitPrice = toNumber(m.groups.unitPrice)
+      const totalPrice = toNumber(m.groups.total)
+      if (name && qty > 0 && unitPrice >= 0 && totalPrice > 0) {
+        items.push({ name, quantity: qty, unitPrice, totalPrice })
+        continue
+      }
+    }
+
+    // Case 2: two-line pattern: NAME on line i, then "qty x unitPrice total" on line i+1
+    if (i + 1 < lines.length) {
+      const next = lines[i + 1]
+      const mm = next.match(qtyUnitPriceTotal)
+      if (mm && mm.groups) {
+        const name = line.trim()
+        if (!looksLikeHeaderOrFooter(name) && /[A-Za-z]/.test(name)) {
+          const qty = toNumber(mm.groups.qty)
+          const unitPrice = toNumber(mm.groups.unitPrice)
+          const totalPrice = toNumber(mm.groups.total)
+          if (name && qty > 0 && unitPrice >= 0 && totalPrice > 0) {
+            items.push({ name, quantity: qty, unitPrice, totalPrice })
+            i++ // consume next line
+            continue
+          }
+        }
+      }
+    }
+
+    // Case 3: fallback "NAME total" → assume quantity 1
+    const t = line.match(trailingTotalPattern)
+    if (t && t.groups) {
+      const name = t.groups.name.trim()
+      if (!looksLikeHeaderOrFooter(name) && /[A-Za-z]/.test(name)) {
+        const totalPrice = toNumber(t.groups.total)
+        if (totalPrice > 0) {
+          items.push({ name, quantity: 1, unitPrice: totalPrice, totalPrice })
+          continue
+        }
+      }
+    }
+  }
+
+  return items
 }
