@@ -17,6 +17,7 @@
 
 import type { VercelRequest, VercelResponse } from '@vercel/node'
 import { createClient } from '@supabase/supabase-js'
+import { parseBasicTicket } from './_basic-parser.js'
 
 // Gmail API configuration
 const GMAIL_API_BASE = 'https://www.googleapis.com/gmail/v1/users/me'
@@ -346,12 +347,22 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
             const base64Data = await gmail.getAttachment(message.id, attachment.attachmentId)
             const pdfBuffer = base64ToBuffer(base64Data)
 
-            // Create File-like object for parser (ensure BlobPart is a typed array)
-            const blob = new Blob([new Uint8Array(pdfBuffer)], { type: 'application/pdf' })
-            const file = new File([blob], attachment.filename, { type: 'application/pdf' })
-
-            // Do not parse server-side: store as pending to be parsed in-app
-            const parsed: any = null
+            // Parse basic data from PDF (date, store, total)
+            let parsed: any = null
+            try {
+              const basicData = await parseBasicTicket(Buffer.from(pdfBuffer))
+              parsed = {
+                date: basicData.date,
+                store: basicData.store,
+                totalFromPDF: basicData.total,
+                invoiceNumber: basicData.invoiceNumber,
+                supermarketId: basicData.supermarketId
+              }
+              console.log(`✓ Basic parse: ${parsed.store} - ${parsed.date} - ${parsed.totalFromPDF}€`)
+            } catch (parseError: any) {
+              console.warn(`⚠ Basic parse failed for ${attachment.filename}:`, parseError.message)
+              // Continue without parsing - will be marked as pending
+            }
 
             // Upload PDF to Supabase Storage (sanitize filename to avoid invalid keys)
             const sanitizeObjectKey = (name: string): string => {
@@ -375,6 +386,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
 
             const sanitizedFileName = sanitizeObjectKey(attachment.filename)
             const fileName = `${authUser.id}/${Date.now()}_${sanitizedFileName}`
+            
             const { data: uploadData, error: uploadError } = await supabase.storage
               .from('tickets')
               .upload(fileName, pdfBuffer, {
@@ -398,7 +410,8 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
                 purchase_date: parsed?.date || null,
                 total_amount: parsed?.totalFromPDF || parsed?.totalAmount || null,
                 parsed: !!parsed,
-                parsing_error: 'Pending parse in app',
+                parsing_error: parsed ? null : 'Pending full parse in app',
+                source_type: 'pdf'
               })
               .select()
               .single()

@@ -1,6 +1,6 @@
 import { useState, useEffect, useMemo } from 'react'
 import { useAuthStore } from '../stores/authStore'
-import { Loader2, Receipt, Plus, Trash2, Save, X, Edit2, Filter, ChevronDown } from 'lucide-react'
+import { Loader2, Receipt, Plus, Trash2, Save, X, Edit2, Filter, ChevronDown, RefreshCcw } from 'lucide-react'
 import ticketService from '../services/ticketService'
 import supermarketService from '../services/supermarketService'
 import { formatCurrency, formatDateTime } from '../lib/formatters'
@@ -46,6 +46,7 @@ export default function TicketsPage() {
   const [pdfFile, setPdfFile] = useState<File | null>(null) // Guardar el archivo PDF original
   const [showStoreDropdown, setShowStoreDropdown] = useState(false)
   const [isDragging, setIsDragging] = useState(false)
+  const [retryingTicketId, setRetryingTicketId] = useState<string | null>(null)
 
   // Estados de filtros
   const [showFilters, setShowFilters] = useState(false)
@@ -127,6 +128,39 @@ export default function TicketsPage() {
     }
   }
 
+  const handleRetryParse = async (ticket: Ticket) => {
+    if (!user) return
+
+    setRetryingTicketId(ticket.id)
+    try {
+      const result = await ticketService.processPendingTicket(ticket.id)
+
+      if (result.success) {
+        await loadTickets()
+        await alert({
+          title: 'Parseo reintentado',
+          message: 'El ticket se ha procesado correctamente.',
+          type: 'success'
+        })
+      } else {
+        await alert({
+          title: 'No se pudo procesar',
+          message: result.error || 'Inténtalo de nuevo más tarde.',
+          type: 'error'
+        })
+      }
+    } catch (error) {
+      console.error('Error retrying parse:', error)
+      await alert({
+        title: 'Error',
+        message: 'No se pudo procesar el ticket. Inténtalo de nuevo.',
+        type: 'error'
+      })
+    } finally {
+      setRetryingTicketId(null)
+    }
+  }
+
   // Lógica de filtrado
   const filteredTickets = useMemo(() => {
     let filtered = [...tickets]
@@ -161,11 +195,17 @@ export default function TicketsPage() {
         break
     }
 
+    const getEffectiveDate = (ticket: Ticket) => {
+      if (ticket.purchase_date) return new Date(ticket.purchase_date)
+      // Fallback: created_at para tickets pendientes sin fecha
+      return ticket.created_at ? new Date(ticket.created_at) : null
+    }
+
     if (startDate) {
       filtered = filtered.filter(ticket => {
-        if (!ticket.purchase_date) return false
-        const ticketDate = new Date(ticket.purchase_date)
-        return ticketDate >= startDate!
+        const dt = getEffectiveDate(ticket)
+        if (!dt) return false
+        return dt >= startDate!
       })
     }
 
@@ -174,9 +214,9 @@ export default function TicketsPage() {
       const endDate = new Date(customEndDate)
       endDate.setHours(23, 59, 59, 999) // Final del día
       filtered = filtered.filter(ticket => {
-        if (!ticket.purchase_date) return false
-        const ticketDate = new Date(ticket.purchase_date)
-        return ticketDate <= endDate
+        const dt = getEffectiveDate(ticket)
+        if (!dt) return false
+        return dt <= endDate
       })
     }
 
@@ -208,8 +248,8 @@ export default function TicketsPage() {
 
     // Ordenar por fecha (más recientes primero)
     return filtered.sort((a, b) => {
-      const dateA = a.purchase_date ? new Date(a.purchase_date).getTime() : 0
-      const dateB = b.purchase_date ? new Date(b.purchase_date).getTime() : 0
+      const dateA = getEffectiveDate(a)?.getTime() || 0
+      const dateB = getEffectiveDate(b)?.getTime() || 0
       return dateB - dateA
     })
   }, [tickets, filterPeriod, filterStore, filterSupermarket, filterMinAmount, filterMaxAmount, customStartDate, customEndDate])
@@ -1014,25 +1054,20 @@ export default function TicketsPage() {
                     </div>
                     
                     <div className="flex-shrink-0 ml-2">
-                      {ticket.source_type === 'manual' ? (
+                      {!ticket.parsed ? (
+                        <span className="inline-flex items-center gap-1 text-xs font-medium text-amber-800 bg-amber-100 px-2 py-1 rounded-full">
+                          <span className="w-1.5 h-1.5 bg-amber-500 rounded-full"></span>
+                          Pendiente
+                        </span>
+                      ) : ticket.source_type === 'manual' ? (
                         <span className="inline-flex items-center gap-1 text-xs font-medium text-blue-700 bg-blue-100 px-2 py-1 rounded-full">
                           <span className="w-1.5 h-1.5 bg-blue-600 rounded-full"></span>
                           Manual
                         </span>
-                      ) : ticket.source_type === 'pdf' ? (
-                        <span className="inline-flex items-center gap-1 text-xs font-medium text-primary-700 bg-primary-100 px-2 py-1 rounded-full">
-                          <span className="w-1.5 h-1.5 bg-primary-600 rounded-full"></span>
-                          PDF
-                        </span>
-                      ) : ticket.parsed ? (
-                        <span className="inline-flex items-center gap-1 text-xs font-medium text-primary-700 bg-primary-100 px-2 py-1 rounded-full">
-                          <span className="w-1.5 h-1.5 bg-primary-600 rounded-full"></span>
-                          PDF
-                        </span>
                       ) : (
-                        <span className="inline-flex items-center gap-1 text-xs font-medium text-red-700 bg-red-100 px-2 py-1 rounded-full">
-                          <span className="w-1.5 h-1.5 bg-red-600 rounded-full"></span>
-                          Error
+                        <span className="inline-flex items-center gap-1 text-xs font-medium text-primary-700 bg-primary-100 px-2 py-1 rounded-full">
+                          <span className="w-1.5 h-1.5 bg-primary-600 rounded-full"></span>
+                          PDF
                         </span>
                       )}
                     </div>
@@ -1047,7 +1082,25 @@ export default function TicketsPage() {
                   )}
 
                   <div className="flex justify-between items-center gap-2">
-                    <div className="flex gap-2">
+                    <div className="flex gap-2 flex-wrap">
+                      {!ticket.parsed && (
+                        <button
+                          onClick={(e) => {
+                            e.stopPropagation()
+                            handleRetryParse(ticket)
+                          }}
+                          disabled={retryingTicketId === ticket.id}
+                          className="flex items-center justify-center gap-1.5 px-3 py-2 bg-amber-50 text-amber-800 rounded-lg hover:bg-amber-100 transition-colors text-sm font-medium disabled:opacity-60 disabled:cursor-not-allowed"
+                          title="Reintentar parseo"
+                        >
+                          {retryingTicketId === ticket.id ? (
+                            <Loader2 className="w-4 h-4 animate-spin" />
+                          ) : (
+                            <RefreshCcw className="w-4 h-4" />
+                          )}
+                          <span className="hidden sm:inline">Reintentar</span>
+                        </button>
+                      )}
                       <button
                         onClick={(e) => {
                           e.stopPropagation()

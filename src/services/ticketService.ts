@@ -250,6 +250,76 @@ export class TicketService {
   }
 
   /**
+   * Process a single pending ticket by downloading and parsing its PDF
+   */
+  private async processTicketFile(ticket: { id: string; file_url: string | null; file_name: string | null }): Promise<void> {
+    if (!ticket.file_url) throw new Error('El ticket no tiene archivo asociado')
+
+    // Extract storage path from public URL or use file_url directly
+    // file_url format: https://[project].supabase.co/storage/v1/object/public/tickets/[path]
+    let downloadUrl = ticket.file_url
+    
+    // If bucket is not public, try to create a signed URL
+    const urlMatch = ticket.file_url.match(/\/tickets\/(.+)$/)
+    if (urlMatch) {
+      const storagePath = urlMatch[1]
+      try {
+        // Try to create a signed URL (valid for 1 hour)
+        const { data, error } = await supabase.storage
+          .from('tickets')
+          .createSignedUrl(storagePath, 3600)
+        
+        if (!error && data?.signedUrl) {
+          downloadUrl = data.signedUrl
+          console.log('✓ Using signed URL for download')
+        }
+      } catch (e) {
+        console.warn('Could not create signed URL, using public URL:', e)
+      }
+    }
+
+    // Download PDF
+    const resp = await fetch(downloadUrl)
+    if (!resp.ok) throw new Error('No se pudo descargar el PDF')
+    const blob = await resp.blob()
+    const file = new File([blob], ticket.file_name || `ticket_${ticket.id}.pdf`, { type: 'application/pdf' })
+
+    // Parse PDF
+    const parsedData = await pdfParser.parseTicketFromFile(file)
+
+    // Update ticket data
+    const updateData: TicketInsert = {
+      supermarket_id: parsedData.supermarketId,
+      ticket_number: parsedData.invoiceNumber,
+      store_name: parsedData.store || parsedData.supermarketName,
+      purchase_date: parsedData.date,
+      total_amount: parsedData.totalFromPDF ?? parsedData.totalAmount ?? null,
+      parsed: true,
+      parsing_error: null,
+      source_type: 'pdf'
+    } as any
+
+    const { error: upErr } = await (supabase.from('tickets') as any)
+      .update(updateData as any)
+      .eq('id', ticket.id)
+
+    if (upErr) throw upErr
+
+    // Insert items
+    if (parsedData.products && parsedData.products.length > 0) {
+      const items = parsedData.products.map((p: any) => ({
+        ticket_id: ticket.id,
+        product_name: p.item_name || p.name || 'Producto',
+        quantity: p.quantity ?? p.weight_kg ?? p.cantidad ?? 1,
+        unit_price: p.unit_price ?? p.price_per_kg ?? p.precioUnitario ?? null,
+        total_price: p.total ?? p.totalPrice ?? p.precioTotal ?? null,
+      }))
+      const { error: itemsErr } = await supabase.from('ticket_items').insert(items as any)
+      if (itemsErr) console.warn('Insert items error', itemsErr)
+    }
+  }
+
+  /**
    * Get ticket with its items
    */
   async getTicketWithItems(ticketId: string): Promise<{
@@ -590,48 +660,7 @@ export class TicketService {
 
     for (const t of tickets as any[]) {
       try {
-        if (!t.file_url) {
-          errors++
-          continue
-        }
-        // 2. Download PDF
-        const resp = await fetch(t.file_url)
-        const blob = await resp.blob()
-        const file = new File([blob], t.file_name || `ticket_${t.id}.pdf`, { type: 'application/pdf' })
-
-        // 3. Parse PDF
-        const parsedData = await pdfParser.parseTicketFromFile(file)
-
-        // 4. Update ticket
-        const updateData: TicketInsert = {
-          supermarket_id: parsedData.supermarketId,
-          ticket_number: parsedData.invoiceNumber,
-          store_name: parsedData.store,
-          purchase_date: parsedData.date,
-          total_amount: parsedData.totalFromPDF || parsedData.totalAmount,
-          parsed: true,
-          parsing_error: null,
-        } as any
-
-        const { error: upErr } = await (supabase.from('tickets') as any)
-          .update(updateData as any)
-          .eq('id', t.id)
-
-        if (upErr) throw upErr
-
-        // 5. Insert items
-        if (parsedData.products && parsedData.products.length > 0) {
-          const items = parsedData.products.map((p: any) => ({
-            ticket_id: t.id,
-            product_name: p.name,
-            quantity: p.quantity,
-            unit_price: p.unitPrice,
-            total_price: p.totalPrice,
-          }))
-          const { error: itemsErr } = await supabase.from('ticket_items').insert(items as any)
-          if (itemsErr) console.warn('Insert items error', itemsErr)
-        }
-
+        await this.processTicketFile(t)
         processed++
       } catch (e) {
         console.error('Error processing pending ticket', t.id, e)
@@ -640,6 +669,29 @@ export class TicketService {
     }
 
     return { processed, errors }
+  }
+
+  /**
+   * Process a specific pending ticket by id
+   */
+  async processPendingTicket(ticketId: string): Promise<{ success: boolean; error?: string }> {
+    const { data, error } = await supabase
+      .from('tickets')
+      .select('id, file_url, file_name, parsed')
+      .eq('id', ticketId)
+      .maybeSingle() as { data: { id: string; file_url: string | null; file_name: string | null; parsed: boolean } | null, error: any }
+
+    if (error) throw error
+    if (!data) return { success: false, error: 'Ticket no encontrado' }
+    if (data.parsed) return { success: false, error: 'El ticket ya está parseado' }
+
+    try {
+      await this.processTicketFile(data)
+      return { success: true }
+    } catch (e: any) {
+      console.error('Error processing ticket', ticketId, e)
+      return { success: false, error: e?.message || 'Error procesando ticket' }
+    }
   }
 }
 
