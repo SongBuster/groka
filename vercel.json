@@ -4,5 +4,11 @@
       "path": "/api/email/gmail-poller",
       "schedule": "0 3 * * *"
     }
+  ],
+  "rewrites": [
+    {
+      "source": "/(.*)",
+      "destination": "/index.html"
+    }
   ]
 }
