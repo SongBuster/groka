@@ -353,8 +353,8 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
             // Parse PDF (try server-side). If unavailable, fallback to store as pending
             let parsed: any = null
             try {
-              const pdfParser = await import('../../src/services/pdfParser')
-              parsed = await pdfParser.default.parseTicketFromFile(file)
+              const serverParser = await import('../lib/server-pdf-parser')
+              parsed = await serverParser.parseTicketFromBuffer(pdfBuffer)
             } catch (parseImportError: any) {
               console.warn('Server-side parser not available, storing as pending:', parseImportError?.message)
             }
@@ -404,7 +404,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
                 purchase_date: parsed?.date || null,
                 total_amount: parsed?.totalFromPDF || parsed?.totalAmount || null,
                 parsed: !!parsed,
-                parsing_error: parsed ? null : 'Server-side parser unavailable. Please parse in app.',
+                parsing_error: parsed ? null : 'Server-side parser unavailable or unrecognized format. Please parse in app.',
               })
               .select()
               .single()
