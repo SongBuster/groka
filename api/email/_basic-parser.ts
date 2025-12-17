@@ -4,12 +4,18 @@
  */
 // @ts-ignore - pdf-parse has no type definitions
 import pdfParse from 'pdf-parse'
+import { createClient } from '@supabase/supabase-js'
+
+const supabaseUrl = process.env.VITE_SUPABASE_URL || process.env.SUPABASE_URL || ''
+const supabaseKey = process.env.VITE_SUPABASE_ANON_KEY || process.env.SUPABASE_ANON_KEY || ''
+const supabase = createClient(supabaseUrl, supabaseKey)
 
 // Regex para números decimales (acepta hasta 3 decimales)
 const DEC = '\\d+(?:[.,]\\d{1,3})?'
 
 interface BasicTicketData {
   date: string | null
+  time: string | null
   store: string | null
   total: number | null
   invoiceNumber: string | null
@@ -57,14 +63,27 @@ function convertToISODate(dateStr: string | null): string | null {
 }
 
 /**
- * Detect supermarket from NIF or name patterns
+ * Detect supermarket from NIF or name patterns and get ID from DB
  */
-function detectSupermarket(text: string): { id: string | null; name: string | null } {
+async function detectSupermarket(text: string): Promise<{ id: string | null; name: string | null }> {
   const upperText = text.toUpperCase()
   
   // Mercadona: A-46103834
   if (upperText.includes('A-46103834') || upperText.includes('A46103834')) {
-    return { id: null, name: 'MERCADONA' } // We'll need the actual ID from DB
+    try {
+      const { data } = await supabase
+        .from('supermarkets')
+        .select('id, name')
+        .ilike('name', '%mercadona%')
+        .maybeSingle()
+      
+      if (data) {
+        return { id: data.id, name: data.name }
+      }
+    } catch (e) {
+      console.warn('Could not fetch Mercadona ID from DB:', e)
+    }
+    return { id: null, name: 'MERCADONA' }
   }
   
   // Add more supermarkets here as needed
@@ -74,14 +93,15 @@ function detectSupermarket(text: string): { id: string | null; name: string | nu
 
 /**
  * Parse PDF buffer and extract basic ticket data
- */
-export async function parseBasicTicket(buffer: Buffer): Promise<BasicTicketData> {
-  try {
-    const data = await pdfParse(buffer)
-    const fullText = data.text
+    }
     
+    // Detect supermarket
+    const supermarket = await detectSupermarket(fullText)
+    result.store = supermarket.name
+    result.supermarketId = supermarket.id
     const result: BasicTicketData = {
       date: null,
+      time: null,
       store: null,
       total: null,
       invoiceNumber: null,
@@ -93,10 +113,17 @@ export async function parseBasicTicket(buffer: Buffer): Promise<BasicTicketData>
     result.store = supermarket.name
     result.supermarketId = supermarket.id
     
-    // Extract date: DD/MM/YYYY or DD-MM-YYYY
-    const dateMatch = fullText.match(/(\d{1,2}[/-]\d{1,2}[/-]\d{2,4})/)
-    if (dateMatch) {
-      result.date = convertToISODate(dateMatch[1])
+    // Extract date and time: DD/MM/YYYY HH:MM or DD-MM-YYYY HH:MM
+    const dateTimeMatch = fullText.match(/(\d{1,2}[/-]\d{1,2}[/-]\d{2,4})\s+(\d{1,2}:\d{2})/)
+    if (dateTimeMatch) {
+      result.date = convertToISODate(dateTimeMatch[1])
+      result.time = dateTimeMatch[2]
+    } else {
+      // Try date only
+      const dateMatch = fullText.match(/(\d{1,2}[/-]\d{1,2}[/-]\d{2,4})/)
+      if (dateMatch) {
+        result.date = convertToISODate(dateMatch[1])
+      }
     }
     
     // Extract store location for Mercadona

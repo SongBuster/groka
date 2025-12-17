@@ -347,18 +347,19 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
             const base64Data = await gmail.getAttachment(message.id, attachment.attachmentId)
             const pdfBuffer = base64ToBuffer(base64Data)
 
-            // Parse basic data from PDF (date, store, total)
-            let parsed: any = null
+            // Parse basic data from PDF (date, store, total) to show preview
+            let basicInfo: any = null
             try {
               const basicData = await parseBasicTicket(Buffer.from(pdfBuffer))
-              parsed = {
+              basicInfo = {
                 date: basicData.date,
+                time: basicData.time,
                 store: basicData.store,
                 totalFromPDF: basicData.total,
                 invoiceNumber: basicData.invoiceNumber,
                 supermarketId: basicData.supermarketId
               }
-              console.log(`✓ Basic parse: ${parsed.store} - ${parsed.date} - ${parsed.totalFromPDF}€`)
+              console.log(`✓ Basic parse: ${basicInfo.store} - ${basicInfo.date} ${basicInfo.time || ''} - ${basicInfo.totalFromPDF}€`)
             } catch (parseError: any) {
               console.warn(`⚠ Basic parse failed for ${attachment.filename}:`, parseError.message)
               // Continue without parsing - will be marked as pending
@@ -397,20 +398,26 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
 
             const { data: { publicUrl } } = supabase.storage.from('tickets').getPublicUrl(fileName)
 
-            // Save ticket to DB
+            // Combine date + time if available
+            let purchaseDateTime = basicInfo?.date || null
+            if (purchaseDateTime && basicInfo?.time) {
+              purchaseDateTime = `${purchaseDateTime}T${basicInfo.time}:00`
+            }
+
+            // Save ticket to DB - always mark as parsed=false for full client-side parse
             const { data: ticket, error: ticketError } = await supabase
               .from('tickets')
               .insert({
                 user_id: authUser.id,
-                supermarket_id: parsed?.supermarketId || null,
+                supermarket_id: basicInfo?.supermarketId || null,
                 file_name: attachment.filename,
                 file_url: publicUrl,
-                ticket_number: parsed?.invoiceNumber || null,
-                store_name: parsed?.store || null,
-                purchase_date: parsed?.date || null,
-                total_amount: parsed?.totalFromPDF || parsed?.totalAmount || null,
-                parsed: !!parsed,
-                parsing_error: parsed ? null : 'Pending full parse in app',
+                ticket_number: basicInfo?.invoiceNumber || null,
+                store_name: basicInfo?.store || null,
+                purchase_date: purchaseDateTime,
+                total_amount: basicInfo?.totalFromPDF || null,
+                parsed: false, // Always false - client will parse products
+                parsing_error: 'Pending full parse in app',
                 source_type: 'pdf'
               })
               .select()
@@ -418,19 +425,8 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
 
             if (ticketError) throw ticketError
 
-            // Save ticket items if parsed
-            if (parsed?.products && parsed.products.length > 0) {
-              const items = parsed.products.map((product: any) => ({
-                ticket_id: ticket.id,
-                product_name: product.name,
-                quantity: product.quantity,
-                unit_price: product.unitPrice,
-                total_price: product.totalPrice,
-              }))
-
-              const { error: itemsError } = await supabase.from('ticket_items').insert(items)
-              if (itemsError) console.error('Error saving ticket items:', itemsError)
-            }
+            // No longer save items on server - client will parse products
+            // if (basicInfo?.products && basicInfo.products.length > 0) { ... }
 
             processedTickets.push(attachment.filename)
             result.tickets.push({
