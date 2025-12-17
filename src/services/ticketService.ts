@@ -191,8 +191,7 @@ export class TicketService {
           const { data: newProduct, error } = await supabase
             .from('products')
             .insert({ 
-              name: product.item_name, 
-              alias: null,
+              name: product.item_name,
               category_id: null 
             } as any)
             .select('id')
@@ -501,7 +500,6 @@ export class TicketService {
         .from('products')
         .insert({
           name: productName,
-          alias: null,
           category_id: null
         } as any)
         .select('id')
