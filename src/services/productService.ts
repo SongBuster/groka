@@ -128,7 +128,6 @@ class ProductService {
     }
 
     const list = (all as any[]).filter((p: any) => {
-    const list = (all as any[]).filter((p: any) => {
       const nName = p?.name ? normalize(p.name) : ''
       const nameMatch = nName.includes(nq)
       const aliases: string[] = Array.isArray(p?.aliases) ? p.aliases : []
@@ -138,6 +137,7 @@ class ProductService {
       })
       return nameMatch || aliasMatch
     }) as ProductWithCategory[]
+
     // Sort: alias matches first, then name, then by name asc
     list.sort((a: any, b: any) => {
       const aAlias = (Array.isArray(a.aliases) ? a.aliases : []).some((x: string) => normalize(x).includes(nq))
