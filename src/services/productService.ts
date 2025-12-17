@@ -82,72 +82,84 @@ class ProductService {
   }
 
   async searchProducts(query: string): Promise<ProductWithCategory[]> {
-    const { data, error } = await supabase
-      .from('products')
-      .select(`
-        *,
-        category:categories(id, name, icon, color)
-      `)
-      .ilike('name', `%${query}%`)
-      .order('name')
-      .limit(50)
+    const q = (query || '').trim()
+    if (!q) return []
 
-    if (error) throw error
-    return data as ProductWithCategory[]
+    // Normalization: lowercase, strip accents, punctuation, collapse spaces
+    const normalize = (s: string) => s
+      .toLowerCase()
+      .normalize('NFD')
+      .replace(/\p{Diacritic}+/gu, '')
+      .replace(/[\p{P}\p{S}]+/gu, ' ')
+      .replace(/\s+/g, ' ')
+      .trim()
+
+    const nq = normalize(q)
+
+    // Fetch products in batches to support alias scanning across large catalogs
+    const pageSize = 1000
+    const maxPages = 5
+    let all: any[] = []
+    for (let page = 0; page < maxPages; page++) {
+      const from = page * pageSize
+      const to = from + pageSize - 1
+      const { data, error } = await supabase
+        .from('products')
+        .select(`
+          id, name, aliases, category_id,
+          category:categories(id, name, icon, color)
+        `)
+        .order('name')
+        .range(from, to)
+
+      if (error) throw error
+      const batch = (data as any[]) || []
+      all = all.concat(batch)
+      if (batch.length < pageSize) break // no more rows
+      // Early stop if we already have plenty of matches
+      const tmp = all.filter((p: any) => {
+        const nName = p?.name ? normalize(p.name) : ''
+        const nameMatch = nName.includes(nq)
+        const aliases: string[] = Array.isArray(p?.aliases) ? p.aliases : []
+        const aliasMatch = aliases.some(a => normalize(a).includes(nq))
+        return nameMatch || aliasMatch
+      })
+      if (tmp.length >= 50) break
+    }
+
+    const list = (all as any[]).filter((p: any) => {
+    const list = (all as any[]).filter((p: any) => {
+      const nName = p?.name ? normalize(p.name) : ''
+      const nameMatch = nName.includes(nq)
+      const aliases: string[] = Array.isArray(p?.aliases) ? p.aliases : []
+      const aliasMatch = aliases.some(a => {
+        const normalized = normalize(a)
+        return normalized.includes(nq)
+      })
+      return nameMatch || aliasMatch
+    }) as ProductWithCategory[]
+    // Sort: alias matches first, then name, then by name asc
+    list.sort((a: any, b: any) => {
+      const aAlias = (Array.isArray(a.aliases) ? a.aliases : []).some((x: string) => normalize(x).includes(nq))
+      const bAlias = (Array.isArray(b.aliases) ? b.aliases : []).some((x: string) => normalize(x).includes(nq))
+      if (aAlias !== bAlias) return aAlias ? -1 : 1
+      const aNameMatch = normalize(a.name).includes(nq)
+      const bNameMatch = normalize(b.name).includes(nq)
+      if (aNameMatch !== bNameMatch) return aNameMatch ? -1 : 1
+      return a.name.localeCompare(b.name)
+    })
+
+    // Limit final results
+    return list.slice(0, 25)
   }
 
   /**
    * Search products with priority: first by alias, then by name
+   * (Uses same robust logic as searchProducts)
    */
   async searchProductsWithPriority(query: string): Promise<ProductWithCategory[]> {
-    if (!query.trim()) return []
-
-    const lowerQuery = query.toLowerCase()
-
-    // Search by aliases first
-    const { data: byAlias, error: aliasError } = await supabase
-      .from('products')
-      .select(`
-        *,
-        category:categories(id, name, icon, color)
-      `)
-      .filter('aliases', 'cs', `{"${lowerQuery}"}`)
-      .order('name')
-      .limit(10)
-
-    if (aliasError) {
-      // Fallback if the array search fails
-      const { data: fallback, error: fallbackError } = await supabase
-        .from('products')
-        .select(`
-          *,
-          category:categories(id, name, icon, color)
-        `)
-        .ilike('name', `%${query}%`)
-        .order('name')
-        .limit(10)
-
-      if (fallbackError) throw fallbackError
-      if (fallback && fallback.length > 0) {
-        return fallback as ProductWithCategory[]
-      }
-    } else if (byAlias && byAlias.length > 0) {
-      return byAlias as ProductWithCategory[]
-    }
-
-    // Otherwise, search by name
-    const { data: byName, error: nameError } = await supabase
-      .from('products')
-      .select(`
-        *,
-        category:categories(id, name, icon, color)
-      `)
-      .ilike('name', `%${query}%`)
-      .order('name')
-      .limit(10)
-
-    if (nameError) throw nameError
-    return (byName as ProductWithCategory[]) || []
+    // Reuse the robust search logic
+    return this.searchProducts(query)
   }
 
   /**
