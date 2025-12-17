@@ -208,9 +208,53 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
   }
 
   // Get Gmail access token from env
-  const gmailAccessToken = process.env.GMAIL_ACCESS_TOKEN
-  if (!gmailAccessToken) {
-    return res.status(500).json({ error: 'GMAIL_ACCESS_TOKEN not configured' })
+  // Get Gmail access token (refresh if possible)
+  const getAccessToken = async (): Promise<string> => {
+    const staticToken = process.env.GMAIL_ACCESS_TOKEN
+    const refreshToken = process.env.GMAIL_REFRESH_TOKEN
+    const clientId = process.env.GMAIL_CLIENT_ID
+    const clientSecret = process.env.GMAIL_CLIENT_SECRET
+
+    // If refresh credentials are available, try to refresh on every run to avoid expirations
+    if (refreshToken && clientId && clientSecret) {
+      try {
+        const response = await fetch('https://oauth2.googleapis.com/token', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
+          body: new URLSearchParams({
+            client_id: clientId,
+            client_secret: clientSecret,
+            refresh_token: refreshToken,
+            grant_type: 'refresh_token',
+          }),
+        })
+
+        if (!response.ok) {
+          const text = await response.text()
+          throw new Error(`Failed to refresh Gmail token: ${text}`)
+        }
+
+        const data = (await response.json()) as { access_token: string }
+        if (data?.access_token) {
+          return data.access_token
+        }
+      } catch (error: any) {
+        console.error('Error refreshing Gmail access token, falling back to static token if available:', error)
+      }
+    }
+
+    if (!staticToken) {
+      throw new Error('GMAIL_ACCESS_TOKEN not configured and refresh failed')
+    }
+
+    return staticToken
+  }
+
+  let gmailAccessToken: string
+  try {
+    gmailAccessToken = await getAccessToken()
+  } catch (error: any) {
+    return res.status(500).json({ error: error.message || 'Failed to obtain Gmail access token' })
   }
 
   // Initialize Supabase with service role key (server-side)
