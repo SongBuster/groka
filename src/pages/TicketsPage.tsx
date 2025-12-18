@@ -1,6 +1,6 @@
 import { useState, useEffect, useMemo } from 'react'
 import { useAuthStore } from '../stores/authStore'
-import { Loader2, Receipt, Plus, Trash2, Save, X, Edit2, Filter, ChevronDown, RefreshCcw } from 'lucide-react'
+import { Loader2, Receipt, Plus, Trash2, Save, X, Filter, ChevronDown, RefreshCcw } from 'lucide-react'
 import ticketService from '../services/ticketService'
 import supermarketService from '../services/supermarketService'
 import { formatCurrency, formatDateTime } from '../lib/formatters'
@@ -1024,6 +1024,7 @@ export default function TicketsPage() {
             {filteredTickets.map((ticket) => (
               <div
                 key={ticket.id}
+                onClick={() => handleEditTicket(ticket)}
                 className="bg-white p-5 sm:p-6 rounded-xl shadow-md border border-secondary-200 hover:shadow-xl hover:border-primary-400 transition-all duration-300 cursor-pointer group"
               >
                 <div className="flex flex-col gap-3">
@@ -1101,17 +1102,6 @@ export default function TicketsPage() {
                           <span className="hidden sm:inline">Reintentar</span>
                         </button>
                       )}
-                      <button
-                        onClick={(e) => {
-                          e.stopPropagation()
-                          handleEditTicket(ticket)
-                        }}
-                        className="flex items-center justify-center gap-1.5 px-3 py-2 bg-primary-50 text-primary-700 rounded-lg hover:bg-primary-100 transition-colors text-sm font-medium"
-                        title="Editar ticket"
-                      >
-                        <Edit2 className="w-4 h-4" />
-                        <span className="hidden sm:inline">Editar</span>
-                      </button>
                       <button
                         onClick={(e) => {
                           e.stopPropagation()

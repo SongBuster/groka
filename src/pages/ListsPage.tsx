@@ -1,6 +1,7 @@
 import { useState, useEffect } from 'react'
+import { useNavigate } from 'react-router-dom'
 import { useAuthStore } from '../stores/authStore'
-import { Loader2, Plus, ShoppingCart, Trash2, Edit2, Check, Calendar, ChevronRight } from 'lucide-react'
+import { Loader2, Plus, ShoppingCart, Trash2, Edit2, Calendar } from 'lucide-react'
 import shoppingListService from '../services/shoppingListService'
 import supermarketService from '../services/supermarketService'
 import { useDialog } from '../hooks/useDialog'
@@ -11,6 +12,7 @@ type ShoppingList = Database['public']['Tables']['shopping_lists']['Row']
 type Supermarket = Database['public']['Tables']['supermarkets']['Row']
 
 export default function ShoppingListsPage() {
+  const navigate = useNavigate()
   const { user } = useAuthStore()
   const { alert, confirm, DialogComponent } = useDialog()
   const [lists, setLists] = useState<ShoppingList[]>([])
@@ -159,30 +161,6 @@ export default function ShoppingListsPage() {
     }
   }
 
-  const handleCompleteList = async (listId: string, listName: string) => {
-    const confirmed = await confirm({
-      title: '¿Marcar como completada?',
-      message: `¿Quieres marcar la lista "${listName}" como completada?`,
-      confirmText: 'Completar',
-      cancelText: 'Cancelar',
-      type: 'warning'
-    })
-
-    if (!confirmed) return
-
-    try {
-      await shoppingListService.completeList(listId)
-      await loadLists()
-    } catch (error) {
-      console.error('Error completing list:', error)
-      await alert({
-        title: 'Error',
-        message: 'No se pudo completar la lista',
-        type: 'error'
-      })
-    }
-  }
-
   // Filter lists
   const filteredLists = lists.filter(list => {
     if (filterStatus === 'active' && !list.is_active) return false
@@ -297,6 +275,7 @@ export default function ShoppingListsPage() {
             return (
               <div
                 key={list.id}
+                onClick={() => navigate(`/lists/${list.id}`)}
                 className="bg-white rounded-xl p-6 shadow-md border border-secondary-200 hover:shadow-xl hover:border-primary-400 transition-all duration-300 cursor-pointer group"
               >
                 <div className="flex flex-col gap-4">
@@ -325,17 +304,6 @@ export default function ShoppingListsPage() {
                         </p>
                       )}
                     </div>
-                    {list.is_active ? (
-                      <span className="inline-flex items-center gap-1 text-xs font-medium text-green-700 bg-green-100 px-2 py-1 rounded-full flex-shrink-0">
-                        <span className="w-1.5 h-1.5 bg-green-600 rounded-full"></span>
-                        Activa
-                      </span>
-                    ) : (
-                      <span className="inline-flex items-center gap-1 text-xs font-medium text-secondary-600 bg-secondary-100 px-2 py-1 rounded-full flex-shrink-0">
-                        <Check className="w-3 h-3" />
-                        Completada
-                      </span>
-                    )}
                   </div>
 
                   {/* Date */}
@@ -353,36 +321,14 @@ export default function ShoppingListsPage() {
                     <button
                       onClick={(e) => {
                         e.stopPropagation()
-                        // Navigate to list details (we'll implement this next)
-                        window.location.href = `/lists/${list.id}`
-                      }}
-                      className="flex-1 flex items-center justify-center gap-2 px-3 py-2 bg-primary-50 text-primary-700 rounded-lg hover:bg-primary-100 transition-colors text-sm font-medium"
-                    >
-                      Ver lista
-                      <ChevronRight className="w-4 h-4" />
-                    </button>
-                    <button
-                      onClick={(e) => {
-                        e.stopPropagation()
                         handleEditList(list)
                       }}
-                      className="px-3 py-2 bg-secondary-50 text-secondary-700 rounded-lg hover:bg-secondary-100 transition-colors"
+                      className="flex-1 px-3 py-2 bg-secondary-50 text-secondary-700 rounded-lg hover:bg-secondary-100 transition-colors flex items-center justify-center gap-2"
                       title="Editar"
                     >
                       <Edit2 className="w-4 h-4" />
+                      <span className="text-sm font-medium">Editar</span>
                     </button>
-                    {list.is_active && (
-                      <button
-                        onClick={(e) => {
-                          e.stopPropagation()
-                          handleCompleteList(list.id, list.name)
-                        }}
-                        className="px-3 py-2 bg-green-50 text-green-700 rounded-lg hover:bg-green-100 transition-colors"
-                        title="Completar"
-                      >
-                        <Check className="w-4 h-4" />
-                      </button>
-                    )}
                     <button
                       onClick={(e) => {
                         e.stopPropagation()
