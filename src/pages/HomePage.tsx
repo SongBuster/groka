@@ -59,8 +59,13 @@ export default function HomePage() {
         <div className="w-full">
           {/* Logo/Header for desktop - centered */}
           <div className="hidden lg:block text-center mb-12">
+            <img 
+              src="/icons/icon-192x192.png" 
+              alt="Groka" 
+              className="w-20 h-20 mx-auto mb-4 rounded-lg shadow-lg"
+            />
             <h1 className="text-5xl xl:text-6xl font-bold text-primary-700 mb-3">
-              🛒 Groka
+              Groka
             </h1>
             <p className="text-xl text-secondary-600">Tu lista de compra inteligente</p>
           </div>
@@ -78,7 +83,11 @@ export default function HomePage() {
         <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
           <div className="flex justify-between items-center h-16 sm:h-20">
             <div className="flex items-center gap-3">
-              <span className="text-3xl sm:text-4xl">🛒</span>
+              <img 
+                src="/icons/icon-192x192.png" 
+                alt="Groka" 
+                className="w-10 h-10 sm:w-12 sm:h-12 rounded-lg shadow-lg"
+              />
               <div>
                 <h1 className="text-xl sm:text-2xl font-bold text-primary-700">Groka</h1>
                 <p className="text-xs sm:text-sm text-secondary-600 hidden sm:block">{user.email}</p>

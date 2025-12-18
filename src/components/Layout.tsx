@@ -35,9 +35,11 @@ export default function Layout() {
           <div className="flex justify-between items-center h-16 sm:h-20">
             {/* Logo */}
             <Link to="/dashboard" className="flex items-center gap-3 hover:opacity-80 transition-opacity">
-              <div className="p-2 bg-primary-500 rounded-lg shadow-lg shadow-primary-500/30">
-                <span className="text-2xl">🛒</span>
-              </div>
+              <img 
+                src="/icons/icon-192x192.png" 
+                alt="Groka" 
+                className="w-10 h-10 sm:w-12 sm:h-12 rounded-lg shadow-lg"
+              />
               <div>
                 <h1 className="text-lg sm:text-xl font-bold text-primary-700">Groka</h1>
                 <div className="flex items-center gap-2">
