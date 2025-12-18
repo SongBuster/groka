@@ -45,6 +45,7 @@ export default function ListDetailPage() {
   // Add product state
   const [searchQuery, setSearchQuery] = useState('')
   const [searchResults, setSearchResults] = useState<ProductWithCategory[]>([])
+  const [historyResults, setHistoryResults] = useState<Array<{ name: string; last_used: string; use_count: number }>>([])
   const [searchLoading, setSearchLoading] = useState(false)
   const [newProductQuantity, setNewProductQuantity] = useState(1)
   const [showQuantityModal, setShowQuantityModal] = useState(false)
@@ -111,10 +112,31 @@ export default function ListDetailPage() {
   }
 
   const searchProducts = async () => {
+    if (!user) return
+    
     setSearchLoading(true)
     try {
-      const results = await productService.searchProductsWithPriority(searchQuery)
-      setSearchResults(results)
+      // Search in products catalog
+      const productResults = await productService.searchProductsWithPriority(searchQuery)
+      setSearchResults(productResults)
+
+      // Search in shopping history
+      const history = await shoppingListService.getShoppingHistory(user.id, 50)
+      const normalizeString = (str: string) => {
+        return str
+          .toLowerCase()
+          .normalize('NFD')
+          .replace(/[\p{Diacritic}]/gu, '')
+          .replace(/[\p{P}\p{S}]/gu, '')
+          .replace(/\s+/g, ' ')
+          .trim()
+      }
+      
+      const normalizedQuery = normalizeString(searchQuery)
+      const matchingHistory = history.filter(item => 
+        normalizeString(item.name).includes(normalizedQuery)
+      )
+      setHistoryResults(matchingHistory)
     } catch (error) {
       console.error('Error searching products:', error)
     } finally {
@@ -139,13 +161,9 @@ export default function ListDetailPage() {
         const lastPrice = await productService.getLastPrice(product.id)
         estimatedPrice = lastPrice
       } else if (customName) {
-        // New product not in database - will be created
-        const newProduct = await productService.create({
-          name: customName.trim(),
-          review_status: 'uncategorized',
-        })
-        productId = newProduct.id
-        name = newProduct.name
+        // Ad-hoc item - NOT creating a product, just storing by name
+        productId = null
+        name = customName.trim()
       }
 
       await shoppingListService.addItem(id, {
@@ -158,6 +176,7 @@ export default function ListDetailPage() {
       await loadItems()
       setSearchQuery('')
       setSearchResults([])
+      setHistoryResults([])
       setNewProductQuantity(1)
     } catch (error) {
       console.error('Error adding product:', error)
@@ -413,28 +432,58 @@ export default function ListDetailPage() {
                     </div>
                   )}
 
+                  {/* Product Results */}
                   {searchResults.length > 0 && (
-                    <div className="space-y-1 max-h-64 overflow-y-auto">
-                      {searchResults.map((product) => (
-                        <button
-                          key={product.id}
-                          onClick={() => handleAddProduct(product)}
-                          className="w-full flex items-center justify-between px-4 py-3 hover:bg-secondary-50 rounded-lg transition-colors text-left"
-                        >
-                          <div>
-                            <div className="font-medium text-secondary-900">{product.name}</div>
-                          </div>
-                          {product.category && (
-                            <span className="text-xs px-2 py-1 rounded-full bg-primary-100 text-primary-700">
-                              {product.category.name}
-                            </span>
-                          )}
-                        </button>
-                      ))}
+                    <div className="space-y-1">
+                      <div className="text-xs font-semibold text-secondary-500 px-2 py-1">PRODUCTOS</div>
+                      <div className="space-y-1 max-h-48 overflow-y-auto">
+                        {searchResults.map((product) => (
+                          <button
+                            key={product.id}
+                            onClick={() => handleAddProduct(product)}
+                            className="w-full flex items-center justify-between px-4 py-3 hover:bg-secondary-50 rounded-lg transition-colors text-left"
+                          >
+                            <div>
+                              <div className="font-medium text-secondary-900">{product.name}</div>
+                            </div>
+                            {product.category && (
+                              <span className="text-xs px-2 py-1 rounded-full bg-primary-100 text-primary-700">
+                                {product.category.name}
+                              </span>
+                            )}
+                          </button>
+                        ))}
+                      </div>
                     </div>
                   )}
 
-                  {/* Add as new product */}
+                  {/* Shopping History Results */}
+                  {historyResults.length > 0 && (
+                    <div className="space-y-1">
+                      <div className="text-xs font-semibold text-secondary-500 px-2 py-1">COMPRADO ANTES</div>
+                      <div className="space-y-1 max-h-48 overflow-y-auto">
+                        {historyResults.map((item, idx) => (
+                          <button
+                            key={idx}
+                            onClick={() => handleAddProduct(undefined, item.name)}
+                            className="w-full flex items-center justify-between px-4 py-3 hover:bg-green-50 rounded-lg transition-colors text-left"
+                          >
+                            <div>
+                              <div className="font-medium text-secondary-900">{item.name}</div>
+                              <div className="text-xs text-secondary-500">
+                                Usado {item.use_count} {item.use_count === 1 ? 'vez' : 'veces'}
+                              </div>
+                            </div>
+                            <span className="text-xs px-2 py-1 rounded-full bg-green-100 text-green-700">
+                              Historial
+                            </span>
+                          </button>
+                        ))}
+                      </div>
+                    </div>
+                  )}
+
+                  {/* Add as ad-hoc item */}
                   {searchQuery.trim().length >= 2 && !searchLoading && (
                     <button
                       onClick={() => handleAddProduct(undefined, searchQuery)}
@@ -446,7 +495,7 @@ export default function ListDetailPage() {
                           Añadir "{searchQuery}"
                         </div>
                         <div className="text-sm text-primary-600">
-                          Producto nuevo (sin categoría)
+                          Añadir a la lista
                         </div>
                       </div>
                     </button>

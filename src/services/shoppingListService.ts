@@ -298,6 +298,76 @@ export class ShoppingListService {
   }
 
   /**
+   * Get shopping history - distinct item names from completed lists
+   * Returns items that have been checked/purchased before, sorted by most recent use
+   */
+  async getShoppingHistory(userId: string, limit: number = 50): Promise<Array<{
+    name: string
+    last_used: string
+    use_count: number
+  }>> {
+    try {
+      // Get all completed lists for this user
+      const { data: lists, error: listsError } = await supabase
+        .from('shopping_lists')
+        .select('id')
+        .eq('owner_id', userId)
+        .eq('is_active', false)
+
+      if (listsError) throw listsError
+      if (!lists || lists.length === 0) return []
+
+      const listIds = (lists as any[]).map(l => l.id)
+
+      // Get checked items from these lists
+      const { data: items, error: itemsError } = await supabase
+        .from('shopping_list_items')
+        .select('name, checked_at')
+        .in('list_id', listIds)
+        .eq('checked', true)
+        .not('checked_at', 'is', null)
+
+      if (itemsError) throw itemsError
+      if (!items || items.length === 0) return []
+
+      // Group by name and aggregate
+      const historyMap = new Map<string, { last_used: string; use_count: number }>()
+
+      items.forEach((item: any) => {
+        const name = item.name.trim()
+        const existing = historyMap.get(name)
+
+        if (!existing) {
+          historyMap.set(name, {
+            last_used: item.checked_at,
+            use_count: 1
+          })
+        } else {
+          existing.use_count++
+          if (item.checked_at > existing.last_used) {
+            existing.last_used = item.checked_at
+          }
+        }
+      })
+
+      // Convert to array and sort by last_used descending
+      const history = Array.from(historyMap.entries())
+        .map(([name, data]) => ({
+          name,
+          last_used: data.last_used,
+          use_count: data.use_count
+        }))
+        .sort((a, b) => b.last_used.localeCompare(a.last_used))
+        .slice(0, limit)
+
+      return history
+    } catch (error) {
+      console.error('Error getting shopping history:', error)
+      return []
+    }
+  }
+
+  /**
    * Update estimated prices for shopping list items based on latest ticket prices
    */
   async updatePricesFromTickets(listId: string, userId: string): Promise<void> {
