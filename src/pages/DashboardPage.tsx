@@ -82,11 +82,15 @@ export default function DashboardPage() {
       <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8 sm:py-12 lg:py-16">
         {/* Header */}
         <div className="text-center mb-12 sm:mb-16">
-          <div className="inline-flex items-center justify-center w-20 h-20 bg-primary-500 rounded-2xl mb-6 shadow-lg shadow-primary-500/30">
-            <span className="text-4xl">🛒</span>
+          <div className="inline-flex items-center justify-center w-20 h-20 bg-gradient-to-br from-primary-500 to-primary-600 rounded-2xl mb-6 shadow-lg shadow-primary-500/30">
+            <img 
+              src="/icons/icon-192x192.png" 
+              alt="Groka" 
+              className="w-16 h-16 rounded-lg"
+            />
           </div>
           <h1 className="text-4xl sm:text-5xl font-bold text-secondary-900 mb-4">
-            Bienvenido a Groka
+            Bienvenido/a a Groka
           </h1>
           <p className="text-lg sm:text-xl text-secondary-600 max-w-2xl mx-auto">
             Tu asistente inteligente para gestionar compras, productos y listas compartidas
