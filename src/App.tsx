@@ -7,8 +7,6 @@ import DashboardPage from './pages/DashboardPage'
 import TicketsPage from './pages/TicketsPage'
 import ProductsPage from './pages/ProductsPage'
 import CategoriesPage from './pages/CategoriesPage'
-import ListsPage from './pages/ListsPage'
-import ListDetailPage from './pages/ListDetailPage'
 import ParserTrainerPage from './pages/ParserTrainerPage'
 import { Loader2 } from 'lucide-react'
 
@@ -51,8 +49,6 @@ function AppContent() {
         <Route path="tickets" element={<TicketsPage />} />
         <Route path="products" element={<ProductsPage />} />
         <Route path="categories" element={<CategoriesPage />} />
-        <Route path="lists" element={<ListsPage />} />
-        <Route path="lists/:id" element={<ListDetailPage />} />
         <Route path="parser-trainer" element={<ParserTrainerPage />} />
       </Route>
     </Routes>

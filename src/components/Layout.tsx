@@ -2,7 +2,7 @@ import { Link, useLocation, Outlet } from 'react-router-dom'
 import { useAuthStore } from '../stores/authStore'
 import { useProductsCount } from '../hooks/useProductsCount'
 import SessionExpiredHandler from './SessionExpiredHandler'
-import { LogOut, Home, Receipt, Package, ShoppingCart } from 'lucide-react'
+import { LogOut, Home, Receipt, Package } from 'lucide-react'
 import { VERSION_INFO } from '../version'
 
 export default function Layout() {
@@ -22,7 +22,6 @@ export default function Layout() {
     { name: 'Inicio', path: '/dashboard', icon: Home },
     { name: 'Tickets', path: '/tickets', icon: Receipt },
     { name: 'Productos', path: '/products', icon: Package },
-    { name: 'Listas', path: '/lists', icon: ShoppingCart },
   ]
 
   const isActive = (path: string) => location.pathname === path

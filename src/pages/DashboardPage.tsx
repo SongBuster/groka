@@ -1,4 +1,4 @@
-import { ShoppingCart, Package, Receipt } from 'lucide-react'
+import { Package, Receipt } from 'lucide-react'
 import { Link } from 'react-router-dom'
 import { useEffect, useState } from 'react'
 import { useAuthStore } from '../stores/authStore'
@@ -6,7 +6,7 @@ import { supabase } from '../lib/supabase'
 
 export default function DashboardPage() {
   const { user } = useAuthStore()
-  const [stats, setStats] = useState({ tickets: 0, products: 0, lists: 0 })
+  const [stats, setStats] = useState({ tickets: 0, products: 0 })
   const [loading, setLoading] = useState(true)
 
   useEffect(() => {
@@ -25,17 +25,9 @@ export default function DashboardPage() {
           .from('products')
           .select('*', { count: 'exact', head: true })
 
-        // Get active shopping lists for user (using owner_id and is_active)
-        const { data: lists } = await supabase
-          .from('shopping_lists')
-          .select('id')
-          .eq('owner_id', user.id)
-          .eq('is_active', true)
-
         setStats({
           tickets: ticketCount || 0,
-          products: productCount || 0,
-          lists: lists?.length || 0
+          products: productCount || 0
         })
       } catch (error) {
         console.error('Error loading dashboard stats:', error)
@@ -65,15 +57,6 @@ export default function DashboardPage() {
       color: 'blue',
       path: '/products',
       features: ['Gestionar productos', 'Crear categorías', 'Análisis de precios']
-    },
-    {
-      id: 'lists',
-      title: 'Listas de la Compra',
-      description: 'Crea y comparte listas con tu familia',
-      icon: ShoppingCart,
-      color: 'green',
-      path: '/lists',
-      features: ['Crear listas', 'Compartir', 'Colaborar en tiempo real']
     }
   ]
 
@@ -140,7 +123,7 @@ export default function DashboardPage() {
         </div>
 
         {/* Quick Stats or Info */}
-        <div className="mt-12 sm:mt-16 grid grid-cols-1 sm:grid-cols-3 gap-4 sm:gap-6">
+        <div className="mt-12 sm:mt-16 grid grid-cols-1 sm:grid-cols-2 gap-4 sm:gap-6">
           <div className="bg-white/60 backdrop-blur-sm rounded-xl p-6 text-center border border-primary-100">
             <div className="text-3xl font-bold text-primary-600 mb-1">
               {loading ? '-' : stats.tickets}
@@ -152,12 +135,6 @@ export default function DashboardPage() {
               {loading ? '-' : stats.products}
             </div>
             <div className="text-sm text-secondary-600">Productos registrados</div>
-          </div>
-          <div className="bg-white/60 backdrop-blur-sm rounded-xl p-6 text-center border border-primary-100">
-            <div className="text-3xl font-bold text-primary-600 mb-1">
-              {loading ? '-' : stats.lists}
-            </div>
-            <div className="text-sm text-secondary-600">Listas activas</div>
           </div>
         </div>
       </div>
