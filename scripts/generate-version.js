@@ -9,42 +9,38 @@ const __filename = fileURLToPath(import.meta.url);
 const __dirname = dirname(__filename);
 
 try {
-  // Get git information - use Netlify env vars if available
-  const branch = process.env.BRANCH || 
+  // Get git information - use Vercel/Netlify env vars if available
+  const branch = process.env.VERCEL_GIT_COMMIT_REF ||
+                 process.env.BRANCH || 
                  process.env.HEAD || 
                  execSync('git rev-parse --abbrev-ref HEAD', { encoding: 'utf8' }).trim();
-  const commit = process.env.COMMIT_REF?.substring(0, 7) || 
+  
+  const commit = process.env.VERCEL_GIT_COMMIT_SHA?.substring(0, 7) ||
+                 process.env.COMMIT_REF?.substring(0, 7) || 
                  execSync('git rev-parse --short HEAD', { encoding: 'utf8' }).trim();
-  const isDirty = process.env.NETLIFY ? false : 
+  
+  const isDirty = (process.env.VERCEL || process.env.NETLIFY) ? false : 
                   execSync('git status --porcelain', { encoding: 'utf8' }).trim().length > 0;
   
-  // Get commit count for major.minor version
-  const commitCount = parseInt(execSync('git rev-list --count HEAD', { encoding: 'utf8' }).trim(), 10);
-  
-  // Calculate patch version based on uncommitted changes
-  let patchVersion = 0;
-  if (isDirty) {
-    // Get hash of all modified files (staged + unstaged)
-    const diffOutput = execSync('git diff HEAD --no-ext-diff', { encoding: 'utf8' });
-    const contentHash = createHash('md5').update(diffOutput).digest('hex').substring(0, 8);
-    
-    // Try to read previous version file
-    const versionPath = join(__dirname, '../src/version.ts');
-    if (existsSync(versionPath)) {
-      const prevContent = readFileSync(versionPath, 'utf8');
-      const prevMatch = prevContent.match(/"version":\s*"0\.(\d+)\.(\d+)"/);
-      if (prevMatch) {
-        const prevCommitCount = parseInt(prevMatch[1], 10);
-        const prevPatch = parseInt(prevMatch[2], 10);
-        // If commit count is the same, increment patch
-        if (prevCommitCount === commitCount) {
-          patchVersion = prevPatch + 1;
-        }
-      }
-    }
+  // Get commit count for version - fallback to timestamp if not available
+  let commitCount;
+  try {
+    commitCount = parseInt(execSync('git rev-list --count HEAD', { encoding: 'utf8' }).trim(), 10);
+  } catch (e) {
+    // If git history not available (shallow clone in Vercel), use timestamp-based version
+    const now = new Date();
+    const daysSinceEpoch = Math.floor(now.getTime() / (1000 * 60 * 60 * 24));
+    commitCount = daysSinceEpoch;
+    console.warn('⚠️  Git history not available, using timestamp-based version');
   }
   
-  const version = `0.${commitCount}.${patchVersion}`;
+  // Calculate version: use build number from timestamp (minutes since Jan 1, 2025)
+  const epoch = new Date('2025-01-01T00:00:00Z').getTime();
+  const now = Date.now();
+  const minutesSinceEpoch = Math.floor((now - epoch) / (1000 * 60));
+  const buildNumber = minutesSinceEpoch;
+  
+  const version = `1.0.${buildNumber}`;
   
   const versionInfo = {
     version,
@@ -63,9 +59,10 @@ export const VERSION_INFO = ${JSON.stringify(versionInfo, null, 2)};
 } catch (error) {
   console.error('Failed to generate version info:', error);
   // Fallback version file
+  const buildNumber = Math.floor(Date.now() / 1000);
   const fallback = `// Auto-generated file - do not edit
 export const VERSION_INFO = {
-  version: "0.5.0",
+  version: "1.0.${buildNumber}",
   branch: "unknown",
   commit: "unknown",
   isDirty: false,

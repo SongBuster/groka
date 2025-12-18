@@ -1,8 +1,8 @@
 // Auto-generated file - do not edit
 export const VERSION_INFO = {
-  "version": "0.48.0",
+  "version": "1.0.506207",
   "branch": "main",
-  "commit": "e0c0ba5",
+  "commit": "ceadc3d",
   "isDirty": true,
-  "buildTime": "2025-12-18T12:23:44.822Z"
+  "buildTime": "2025-12-18T12:47:53.010Z"
 };
