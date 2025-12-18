@@ -166,17 +166,35 @@ class ProductService {
    * Get the last price of a product from tickets
    */
   async getLastPrice(productId: string): Promise<number | null> {
-    const { data, error } = await supabase
-      .from('ticket_items')
-      .select('unit_price, ticket:tickets!inner(purchase_date)')
-      .eq('product_id', productId)
-      .not('unit_price', 'is', null)
-      .order('ticket.purchase_date', { ascending: false })
-      .limit(1)
-      .single()
+    try {
+      // Get all ticket_items for this product with their ticket dates
+      const { data, error } = await supabase
+        .from('ticket_items')
+        .select('unit_price, created_at, tickets!inner(purchase_date)')
+        .eq('product_id', productId)
+        .not('unit_price', 'is', null)
+        .order('created_at', { ascending: false })
+        .limit(10)
 
-    if (error || !data) return null
-    return (data as any).unit_price
+      if (error) {
+        console.error('Error fetching last price:', error)
+        return null
+      }
+
+      if (!data || data.length === 0) return null
+
+      // Sort by ticket purchase_date on the client side and get the most recent
+      const sorted = (data as any[]).sort((a, b) => {
+        const dateA = a.tickets?.purchase_date || a.created_at
+        const dateB = b.tickets?.purchase_date || b.created_at
+        return dateB.localeCompare(dateA)
+      })
+
+      return sorted[0].unit_price
+    } catch (err) {
+      console.error('Error in getLastPrice:', err)
+      return null
+    }
   }
 
   /**
