@@ -3,7 +3,6 @@ import { BrowserRouter, Routes, Route, Navigate } from 'react-router-dom'
 import { useAuthStore } from './stores/authStore'
 import AuthForm from './components/AuthForm'
 import Layout from './components/Layout'
-import DashboardPage from './pages/DashboardPage'
 import TicketsPage from './pages/TicketsPage'
 import ProductsPage from './pages/ProductsPage'
 import CategoriesPage from './pages/CategoriesPage'
@@ -44,8 +43,7 @@ function AppContent() {
   return (
     <Routes>
       <Route path="/" element={<Layout />}>
-        <Route index element={<Navigate to="/dashboard" replace />} />
-        <Route path="dashboard" element={<DashboardPage />} />
+        <Route index element={<Navigate to="/tickets" replace />} />
         <Route path="tickets" element={<TicketsPage />} />
         <Route path="products" element={<ProductsPage />} />
         <Route path="categories" element={<CategoriesPage />} />

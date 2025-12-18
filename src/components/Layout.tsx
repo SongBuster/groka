@@ -2,7 +2,7 @@ import { Link, useLocation, Outlet } from 'react-router-dom'
 import { useAuthStore } from '../stores/authStore'
 import { useProductsCount } from '../hooks/useProductsCount'
 import SessionExpiredHandler from './SessionExpiredHandler'
-import { LogOut, Home, Receipt, Package } from 'lucide-react'
+import { LogOut, Receipt, Package } from 'lucide-react'
 import { VERSION_INFO } from '../version'
 
 export default function Layout() {
@@ -19,7 +19,6 @@ export default function Layout() {
   }
 
   const navigation = [
-    { name: 'Inicio', path: '/dashboard', icon: Home },
     { name: 'Tickets', path: '/tickets', icon: Receipt },
     { name: 'Productos', path: '/products', icon: Package },
   ]
@@ -33,7 +32,7 @@ export default function Layout() {
         <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
           <div className="flex justify-between items-center h-16 sm:h-20">
             {/* Logo */}
-            <Link to="/dashboard" className="flex items-center gap-3 hover:opacity-80 transition-opacity">
+            <Link to="/tickets" className="flex items-center gap-3 hover:opacity-80 transition-opacity">
               <img 
                 src="/icons/icon-192x192.png" 
                 alt="Groka" 
