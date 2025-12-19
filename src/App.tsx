@@ -7,6 +7,8 @@ import TicketsPage from './pages/TicketsPage'
 import ProductsPage from './pages/ProductsPage'
 import CategoriesPage from './pages/CategoriesPage'
 import ParserTrainerPage from './pages/ParserTrainerPage'
+import ShoppingListsPage from './pages/ShoppingListsPage'
+import ShoppingListDetailPage from './pages/ShoppingListDetailPage'
 import { Loader2 } from 'lucide-react'
 import { useNavigate } from 'react-router-dom'
 
@@ -57,6 +59,8 @@ function AppContent() {
       <Route path="/" element={<Layout />}>
         <Route index element={<Navigate to="/tickets" replace />} />
         <Route path="tickets" element={<TicketsPage />} />
+        <Route path="shopping-lists" element={<ShoppingListsPage />} />
+        <Route path="shopping-lists/:id" element={<ShoppingListDetailPage />} />
         <Route path="products" element={<ProductsPage />} />
         <Route path="categories" element={<CategoriesPage />} />
         <Route path="parser-trainer" element={<ParserTrainerPage />} />
