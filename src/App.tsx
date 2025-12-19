@@ -1,4 +1,4 @@
-import { useEffect } from 'react'
+import { useEffect, useRef } from 'react'
 import { BrowserRouter, Routes, Route, Navigate } from 'react-router-dom'
 import { useAuthStore } from './stores/authStore'
 import AuthForm from './components/AuthForm'
@@ -8,13 +8,25 @@ import ProductsPage from './pages/ProductsPage'
 import CategoriesPage from './pages/CategoriesPage'
 import ParserTrainerPage from './pages/ParserTrainerPage'
 import { Loader2 } from 'lucide-react'
+import { useNavigate } from 'react-router-dom'
 
 function AppContent() {
   const { user, loading, initialize } = useAuthStore()
+  const navigate = useNavigate()
+  const prevUser = useRef<typeof user>(null)
 
   useEffect(() => {
     initialize()
   }, [initialize])
+
+  // After successful login (or on reload with existing session), redirect to tickets once
+  useEffect(() => {
+    if (loading) return
+    if (user && !prevUser.current) {
+      navigate('/tickets', { replace: true })
+    }
+    prevUser.current = user
+  }, [user, loading, navigate])
 
   if (loading) {
     return (

@@ -1,7 +1,8 @@
 import { useState, useEffect } from 'react'
-import { Search, CheckCircle, AlertCircle, Clock, Edit2, Plus, Trash2 } from 'lucide-react'
+import { Search, CheckCircle, AlertCircle, Clock, Edit2, Plus, Trash2, RefreshCcw } from 'lucide-react'
 import productService, { type ProductWithCategory } from '../services/productService'
 import categoryService from '../services/categoryService'
+import catalogService from '../services/catalogService'
 import type { Database } from '../types/database'
 import { useAuthStore } from '../stores/authStore'
 import { useDialog } from '../hooks/useDialog'
@@ -31,6 +32,7 @@ export default function ProductsPage() {
   })
   const [categorySearch, setCategorySearch] = useState('')
   const [showCategoryDropdown, setShowCategoryDropdown] = useState(false)
+  const [replacingWithGlobal, setReplacingWithGlobal] = useState(false)
 
   useEffect(() => {
     loadData()
@@ -52,6 +54,51 @@ export default function ProductsPage() {
       setLoading(false)
     }
   }
+
+  // First-time prompt: if empty catalog, ask to import global once per user
+  useEffect(() => {
+    if (loading) return
+    if (!user?.id) return
+    const alreadyAsked = localStorage.getItem(`global-import-prompt-shown:${user.id}`) === '1'
+    const pendingPostSignup = localStorage.getItem(`post-signup-import-prompt:${user.id}`) === '1'
+    if (alreadyAsked || pendingPostSignup) return
+    const isEmpty = products.length === 0 && categories.length === 0
+    if (!isEmpty) return
+
+    const ask = async () => {
+      const accepted = await confirm({
+        title: 'Importar catálogo global',
+        message:
+          'Tu catálogo está vacío. ¿Quieres importar el catálogo global ahora?\n\nEsto reemplazará tus productos y categorías actuales (si los hubiera) por el catálogo global. Los aliases no se incluyen.',
+        type: 'warning',
+        confirmText: 'Reemplazar con global',
+        cancelText: 'Mantener vacío'
+      })
+      localStorage.setItem(`global-import-prompt-shown:${user.id}`, '1')
+      if (!accepted) return
+      try {
+        setReplacingWithGlobal(true)
+        await catalogService.replaceUserCatalogWithGlobal()
+        await loadData()
+        await alert({
+          title: 'Catálogo importado',
+          message: 'Se ha importado el catálogo global correctamente.',
+          type: 'success'
+        })
+      } catch (e) {
+        console.error('Global import failed', e)
+        alert({
+          title: 'Error',
+          message: 'No se pudo importar el catálogo global. Inténtalo de nuevo más tarde.',
+          type: 'error'
+        })
+      } finally {
+        setReplacingWithGlobal(false)
+      }
+    }
+    ask()
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [loading, user?.id, products.length, categories.length])
 
   const handleSaveProduct = async () => {
     if (isEditMode) {
@@ -146,6 +193,38 @@ export default function ProductsPage() {
     setShowModal(true)
   }
 
+  const handleReplaceWithGlobal = async () => {
+    if (!user?.id) return
+    const accepted = await confirm({
+      title: 'Reemplazar por catálogo global',
+      message:
+        'Esta acción eliminará tus productos y categorías y los reemplazará por el catálogo global.\n\nNo se importan aliases. ¿Deseas continuar?',
+      type: 'warning',
+      confirmText: 'Reemplazar',
+      cancelText: 'Cancelar'
+    })
+    if (!accepted) return
+    try {
+      setReplacingWithGlobal(true)
+      await catalogService.replaceUserCatalogWithGlobal()
+      await loadData()
+      await alert({
+        title: 'Catálogo reemplazado',
+        message: 'Se ha reemplazado tu catálogo por el global.',
+        type: 'success'
+      })
+    } catch (e) {
+      console.error('Global replace failed', e)
+      alert({
+        title: 'Error',
+        message: 'No se pudo reemplazar tu catálogo. Inténtalo de nuevo.',
+        type: 'error'
+      })
+    } finally {
+      setReplacingWithGlobal(false)
+    }
+  }
+
   const closeModal = () => {
     setShowModal(false)
     setIsEditMode(false)
@@ -231,6 +310,17 @@ export default function ProductsPage() {
           >
             <span className="text-sm font-medium">Categorías</span>
           </a>
+          <button
+            onClick={handleReplaceWithGlobal}
+            disabled={replacingWithGlobal}
+            className="flex items-center gap-2 px-4 py-2 text-red-700 border border-red-300 rounded-lg hover:bg-red-50 transition-colors disabled:opacity-60 disabled:cursor-not-allowed"
+            title="Reemplaza tus datos por el catálogo global"
+          >
+            <RefreshCcw className="w-4 h-4" />
+            <span className="text-sm font-medium">
+              {replacingWithGlobal ? 'Reemplazando…' : 'Reemplazar catálogo global'}
+            </span>
+          </button>
         </div>
       </div>
 

@@ -1,6 +1,7 @@
 import { useState, useEffect } from 'react'
-import { Plus, Edit2, Trash2, Save, X } from 'lucide-react'
+import { Plus, Edit2, Trash2, Save, X, RefreshCcw } from 'lucide-react'
 import categoryService from '../services/categoryService'
+import catalogService from '../services/catalogService'
 import { useDialog } from '../hooks/useDialog'
 import type { Database } from '../types/database'
 import { useAuthStore } from '../stores/authStore'
@@ -12,6 +13,7 @@ export default function CategoriesPage() {
   const { user } = useAuthStore()
   const [categories, setCategories] = useState<Category[]>([])
   const [loading, setLoading] = useState(true)
+  const [replacingWithGlobal, setReplacingWithGlobal] = useState(false)
   const [showModal, setShowModal] = useState(false)
   const [editingCategory, setEditingCategory] = useState<Category | null>(null)
   const [formData, setFormData] = useState({
@@ -37,6 +39,38 @@ export default function CategoriesPage() {
       console.error('Error loading categories:', error)
     } finally {
       setLoading(false)
+    }
+  }
+
+  const handleReplaceWithGlobal = async () => {
+    if (!user?.id) return
+    const accepted = await confirm({
+      title: 'Reemplazar por catálogo global',
+      message:
+        'Esta acción eliminará tus productos y categorías y los reemplazará por el catálogo global.\n\nNo se importan aliases. ¿Deseas continuar?',
+      type: 'warning',
+      confirmText: 'Reemplazar',
+      cancelText: 'Cancelar'
+    })
+    if (!accepted) return
+    try {
+      setReplacingWithGlobal(true)
+      await catalogService.replaceUserCatalogWithGlobal()
+      await loadCategories()
+      await alert({
+        title: 'Catálogo reemplazado',
+        message: 'Se ha reemplazado tu catálogo por el global.',
+        type: 'success'
+      })
+    } catch (e) {
+      console.error('Global replace failed', e)
+      await alert({
+        title: 'Error',
+        message: 'No se pudo reemplazar tu catálogo. Inténtalo de nuevo.',
+        type: 'error'
+      })
+    } finally {
+      setReplacingWithGlobal(false)
     }
   }
 
@@ -186,13 +220,34 @@ export default function CategoriesPage() {
   return (
     <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-6 sm:py-8">
       {/* Header */}
-      <div className="mb-8">
-        <h1 className="text-3xl sm:text-4xl font-bold text-secondary-900 mb-2">
-          Categorías
-        </h1>
-        <p className="text-secondary-600">
-          Gestiona las categorías para organizar tus productos
-        </p>
+      <div className="mb-8 flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4">
+        <div>
+          <h1 className="text-3xl sm:text-4xl font-bold text-secondary-900 mb-2">
+            Categorías
+          </h1>
+          <p className="text-secondary-600">
+            Gestiona las categorías para organizar tus productos
+          </p>
+        </div>
+        <div className="flex gap-2">
+          <a
+            href="/products"
+            className="flex items-center gap-2 px-4 py-2 text-primary-700 border border-primary-300 rounded-lg hover:bg-primary-50 transition-colors"
+          >
+            <span className="text-sm font-medium">Productos</span>
+          </a>
+          <button
+            onClick={handleReplaceWithGlobal}
+            disabled={replacingWithGlobal}
+            className="flex items-center gap-2 px-4 py-2 text-red-700 border border-red-300 rounded-lg hover:bg-red-50 transition-colors disabled:opacity-60 disabled:cursor-not-allowed"
+            title="Reemplaza tus datos por el catálogo global"
+          >
+            <RefreshCcw className="w-4 h-4" />
+            <span className="text-sm font-medium">
+              {replacingWithGlobal ? 'Reemplazando…' : 'Reemplazar catálogo global'}
+            </span>
+          </button>
+        </div>
       </div>
 
       {/* Categories Grid */}

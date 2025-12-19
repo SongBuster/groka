@@ -4,11 +4,15 @@ import { useProductsCount } from '../hooks/useProductsCount'
 import SessionExpiredHandler from './SessionExpiredHandler'
 import { LogOut, Receipt, Package } from 'lucide-react'
 import { VERSION_INFO } from '../version'
+import { useEffect } from 'react'
+import { useDialog } from '../hooks/useDialog'
+import catalogService from '../services/catalogService'
 
 export default function Layout() {
   const { user, signOut } = useAuthStore()
   const location = useLocation()
   const { count: productsNeedingAttention } = useProductsCount()
+  const { alert, confirm, DialogComponent } = useDialog()
 
   const handleSignOut = async () => {
     try {
@@ -24,6 +28,56 @@ export default function Layout() {
   ]
 
   const isActive = (path: string) => location.pathname === path
+
+  // Post-signup prompt to import global catalog once
+  useEffect(() => {
+    if (!user?.id) return
+    const key = `post-signup-import-prompt:${user.id}`
+    const shouldPrompt = localStorage.getItem(key) === '1'
+    if (!shouldPrompt) return
+
+    const alreadyAskedKey = `global-import-prompt-shown:${user.id}`
+    const alreadyAsked = localStorage.getItem(alreadyAskedKey) === '1'
+
+    const run = async () => {
+      const accepted = await confirm({
+        title: 'Importar catálogo global',
+        message:
+          '¿Quieres importar ahora el catálogo global recomendado?\n\nEsto reemplazará tus productos y categorías actuales (si los hubiera). Los aliases no se incluyen.',
+        type: 'warning',
+        confirmText: 'Importar ahora',
+        cancelText: 'No, gracias'
+      })
+      try {
+        localStorage.setItem(alreadyAskedKey, '1')
+        localStorage.removeItem(key)
+      } catch {}
+      if (!accepted) return
+      try {
+        await catalogService.replaceUserCatalogWithGlobal()
+        await alert({
+          title: 'Catálogo importado',
+          message: 'Se ha importado el catálogo global correctamente.',
+          type: 'success'
+        })
+      } catch (e) {
+        console.error('Global import failed', e)
+        await alert({
+          title: 'Error',
+          message: 'No se pudo importar el catálogo global. Inténtalo de nuevo más tarde.',
+          type: 'error'
+        })
+      }
+    }
+
+    // If they were already asked by another page, just clear the flag.
+    if (alreadyAsked) {
+      try { localStorage.removeItem(key) } catch {}
+      return
+    }
+    run()
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [user?.id])
 
   return (
     <div className="min-h-screen bg-gradient-to-br from-primary-50 to-secondary-50">
@@ -79,17 +133,6 @@ export default function Layout() {
               })}
             </nav>
 
-            {/* Dev Tools */}
-            {import.meta.env.DEV && (
-              <Link
-                to="/parser-trainer"
-                className="flex items-center gap-2 px-3 sm:px-4 py-2 text-secondary-500 hover:text-primary-600 hover:bg-primary-50 rounded-lg transition-colors text-sm"
-                title="Parser Trainer (Dev)"
-              >
-                🔬
-              </Link>
-            )}
-
             {/* Sign Out Button */}
             <button
               onClick={handleSignOut}
@@ -141,6 +184,9 @@ export default function Layout() {
       
       {/* Session expired handler */}
       <SessionExpiredHandler />
+
+      {/* Dialog host */}
+      <DialogComponent />
     </div>
   )
 }

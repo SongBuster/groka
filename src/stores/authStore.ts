@@ -39,11 +39,21 @@ export const useAuthStore = create<AuthState>((set) => ({
   },
 
   signUp: async (email: string, password: string) => {
-    const { error } = await supabase.auth.signUp({
+    const siteUrl = import.meta.env.VITE_SITE_URL || window.location.origin
+    const { data, error } = await supabase.auth.signUp({
       email,
       password,
+      options: {
+        emailRedirectTo: `${siteUrl}/tickets`
+      }
     })
     if (error) throw error
+    // Mark to show post-signup prompt on first authenticated session
+    if (data?.user?.id) {
+      try {
+        localStorage.setItem(`post-signup-import-prompt:${data.user.id}`, '1')
+      } catch {}
+    }
   },
 
   signOut: async () => {

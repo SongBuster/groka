@@ -16,6 +16,11 @@ alter table public.categories alter column user_id set not null;
 alter table public.products alter column user_id set not null;
 
 -- 4) Unique constraints per user
+-- Drop legacy global unique constraints if they exist
+alter table public.categories drop constraint if exists categories_name_key;
+alter table public.products drop constraint if exists products_name_key;
+
+-- Create per-user unique indexes
 create unique index if not exists categories_user_name_unique on public.categories (user_id, lower(name));
 create unique index if not exists products_user_name_unique on public.products (user_id, lower(name));
 
