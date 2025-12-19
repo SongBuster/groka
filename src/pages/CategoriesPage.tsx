@@ -3,11 +3,13 @@ import { Plus, Edit2, Trash2, Save, X } from 'lucide-react'
 import categoryService from '../services/categoryService'
 import { useDialog } from '../hooks/useDialog'
 import type { Database } from '../types/database'
+import { useAuthStore } from '../stores/authStore'
 
 type Category = Database['public']['Tables']['categories']['Row']
 
 export default function CategoriesPage() {
   const { alert, confirm, DialogComponent } = useDialog()
+  const { user } = useAuthStore()
   const [categories, setCategories] = useState<Category[]>([])
   const [loading, setLoading] = useState(true)
   const [showModal, setShowModal] = useState(false)
@@ -28,7 +30,8 @@ export default function CategoriesPage() {
   const loadCategories = async () => {
     setLoading(true)
     try {
-      const data = await categoryService.getAll()
+      if (!user?.id) return
+      const data = await categoryService.getAll(user.id)
       setCategories(data)
     } catch (error) {
       console.error('Error loading categories:', error)
@@ -93,12 +96,13 @@ export default function CategoriesPage() {
 
   const handleSave = async (closeModal: boolean = true) => {
     try {
+      if (!user?.id) return
       if (editingCategory) {
-        await categoryService.update(editingCategory.id, formData)
+        await categoryService.update(editingCategory.id, formData, user.id)
         await loadCategories()
         handleCloseModal()
       } else {
-        await categoryService.create(formData)
+        await categoryService.create(formData, user.id)
         await loadCategories()
         if (closeModal) {
           handleCloseModal()
@@ -136,7 +140,8 @@ export default function CategoriesPage() {
     if (!confirmed) return
 
     try {
-      await categoryService.delete(id)
+      if (!user?.id) return
+      await categoryService.delete(id, user.id)
       await loadCategories()
       await alert({
         title: 'Categoría eliminada',

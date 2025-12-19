@@ -39,9 +39,10 @@ export default function ProductsPage() {
   const loadData = async () => {
     setLoading(true)
     try {
+      if (!user?.id) return
       const [productsData, categoriesData] = await Promise.all([
-        productService.getAll(),
-        categoryService.getAll()
+        productService.getAll(user.id),
+        categoryService.getAll(user.id)
       ])
       setProducts(productsData)
       setCategories(categoriesData)
@@ -56,12 +57,13 @@ export default function ProductsPage() {
     if (isEditMode) {
       if (!currentProduct) return
       try {
+        if (!user?.id) return
         await productService.update(
           currentProduct.id,
           {
             category_id: currentProduct.category_id,
           },
-          user?.id
+          user.id
         )
         await loadData()
         notifyProductsUpdated()
@@ -72,10 +74,11 @@ export default function ProductsPage() {
     } else {
       if (!newProduct.name.trim()) return
       try {
+        if (!user?.id) return
         const createdProduct = await productService.create({
           name: newProduct.name.trim(),
           category_id: newProduct.category_id || null,
-        })
+        }, user.id)
         // Switch to edit mode to allow adding aliases
         setIsEditMode(true)
         setIsNewlyCreated(true)
@@ -108,7 +111,8 @@ export default function ProductsPage() {
     if (!confirmed) return
 
     try {
-      await productService.delete(currentProduct.id)
+      if (!user?.id) return
+      await productService.delete(currentProduct.id, user.id)
       await loadData()
       notifyProductsUpdated()
       closeModal()

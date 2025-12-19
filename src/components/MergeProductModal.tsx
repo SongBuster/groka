@@ -1,6 +1,7 @@
 import { useState, useEffect } from 'react'
 import { X, Link2, Search } from 'lucide-react'
 import productService, { type ProductWithCategory } from '../services/productService'
+import { useAuthStore } from '../stores/authStore'
 
 interface MergeProductModalProps {
   product: ProductWithCategory
@@ -9,6 +10,7 @@ interface MergeProductModalProps {
 }
 
 export default function MergeProductModal({ product, onClose, onMerge }: MergeProductModalProps) {
+  const { user } = useAuthStore()
   const [searchQuery, setSearchQuery] = useState('')
   const [searchResults, setSearchResults] = useState<ProductWithCategory[]>([])
   const [selectedProduct, setSelectedProduct] = useState<ProductWithCategory | null>(null)
@@ -31,7 +33,8 @@ export default function MergeProductModal({ product, onClose, onMerge }: MergePr
   const searchProducts = async () => {
     setLoading(true)
     try {
-      const results = await productService.searchProductsWithPriority(searchQuery)
+      if (!user?.id) return
+      const results = await productService.searchProductsWithPriority(searchQuery, user.id)
       // Filter out the current product
       setSearchResults(results.filter(p => p.id !== product.id))
     } catch (err) {
@@ -47,7 +50,8 @@ export default function MergeProductModal({ product, onClose, onMerge }: MergePr
     setLoading(true)
     try {
       // Add the current product name as an alias to the selected product
-      await productService.addAlias(selectedProduct.id, newAlias.trim())
+      if (!user?.id) return
+      await productService.addAlias(selectedProduct.id, newAlias.trim(), user.id)
       onMerge()
     } catch (err) {
       setError('Error al asignar el alias')

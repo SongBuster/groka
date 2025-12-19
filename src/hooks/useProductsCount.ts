@@ -1,6 +1,7 @@
 import { useState, useEffect } from 'react'
 import productService from '../services/productService'
 import { handleSupabaseError } from '../lib/sessionManager'
+import { useAuthStore } from '../stores/authStore'
 
 // Evento personalizado para actualizar el contador
 export const PRODUCTS_UPDATED_EVENT = 'products-updated'
@@ -8,11 +9,13 @@ export const PRODUCTS_UPDATED_EVENT = 'products-updated'
 export function useProductsCount() {
   const [count, setCount] = useState(0)
   const [loading, setLoading] = useState(true)
+  const { user } = useAuthStore()
 
   useEffect(() => {
     const loadCount = async () => {
       try {
-        const products = await productService.getAll()
+        if (!user?.id) return
+        const products = await productService.getAll(user.id)
         // Contar productos pendientes + sin categoría
         const needsAttention = products.filter(
           p => p.review_status === 'pending' || p.review_status === 'uncategorized'
@@ -43,7 +46,7 @@ export function useProductsCount() {
       window.removeEventListener(PRODUCTS_UPDATED_EVENT, handleProductsUpdate)
       clearInterval(interval)
     }
-  }, [])
+  }, [user?.id])
 
   return { count, loading }
 }

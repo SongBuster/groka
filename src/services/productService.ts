@@ -4,6 +4,8 @@ import type { Database } from '../types/database'
 type Product = Database['public']['Tables']['products']['Row']
 type ProductInsert = Database['public']['Tables']['products']['Insert']
 type ProductUpdate = Database['public']['Tables']['products']['Update']
+type ProductInput = Omit<ProductInsert, 'user_id'>
+type ProductUpdateInput = Omit<ProductUpdate, 'user_id'>
 
 export type ProductWithCategory = Product & {
   category?: {
@@ -22,20 +24,21 @@ export type ProductStats = {
 }
 
 class ProductService {
-  async getAll(): Promise<ProductWithCategory[]> {
+  async getAll(userId: string): Promise<ProductWithCategory[]> {
     const { data, error } = await supabase
       .from('products')
       .select(`
         *,
         category:categories(id, name, icon, color)
       `)
+      .eq('user_id', userId)
       .order('name')
 
     if (error) throw error
     return data as ProductWithCategory[]
   }
 
-  async getByStatus(status: 'pending' | 'uncategorized' | 'reviewed'): Promise<ProductWithCategory[]> {
+  async getByStatus(status: 'pending' | 'uncategorized' | 'reviewed', userId: string): Promise<ProductWithCategory[]> {
     const { data, error } = await supabase
       .from('products')
       .select(`
@@ -43,13 +46,14 @@ class ProductService {
         category:categories(id, name, icon, color)
       `)
       .eq('review_status', status)
+      .eq('user_id', userId)
       .order('name')
 
     if (error) throw error
     return data as ProductWithCategory[]
   }
 
-  async getByCategory(categoryId: string): Promise<ProductWithCategory[]> {
+  async getByCategory(categoryId: string, userId: string): Promise<ProductWithCategory[]> {
     const { data, error } = await supabase
       .from('products')
       .select(`
@@ -57,16 +61,18 @@ class ProductService {
         category:categories(id, name, icon, color)
       `)
       .eq('category_id', categoryId)
+      .eq('user_id', userId)
       .order('name')
 
     if (error) throw error
     return data as ProductWithCategory[]
   }
 
-  async getStats(): Promise<ProductStats> {
+  async getStats(userId: string): Promise<ProductStats> {
     const { data, error } = await supabase
       .from('products')
       .select('review_status')
+      .eq('user_id', userId)
 
     if (error) throw error
 
@@ -81,7 +87,7 @@ class ProductService {
     return stats
   }
 
-  async searchProducts(query: string): Promise<ProductWithCategory[]> {
+  async searchProducts(query: string, userId: string): Promise<ProductWithCategory[]> {
     const q = (query || '').trim()
     if (!q) return []
 
@@ -109,6 +115,7 @@ class ProductService {
           id, name, aliases, category_id,
           category:categories(id, name, icon, color)
         `)
+        .eq('user_id', userId)
         .order('name')
         .range(from, to)
 
@@ -140,8 +147,10 @@ class ProductService {
 
     // Sort: alias matches first, then name, then by name asc
     list.sort((a: any, b: any) => {
-      const aAlias = (Array.isArray(a.aliases) ? a.aliases : []).some((x: string) => normalize(x).includes(nq))
-      const bAlias = (Array.isArray(b.aliases) ? b.aliases : []).some((x: string) => normalize(x).includes(nq))
+      const aAliasList = Array.isArray(a.aliases) ? a.aliases : []
+      const bAliasList = Array.isArray(b.aliases) ? b.aliases : []
+      const aAlias = aAliasList.some((x: string) => normalize(x).includes(nq))
+      const bAlias = bAliasList.some((x: string) => normalize(x).includes(nq))
       if (aAlias !== bAlias) return aAlias ? -1 : 1
       const aNameMatch = normalize(a.name).includes(nq)
       const bNameMatch = normalize(b.name).includes(nq)
@@ -157,9 +166,8 @@ class ProductService {
    * Search products with priority: first by alias, then by name
    * (Uses same robust logic as searchProducts)
    */
-  async searchProductsWithPriority(query: string): Promise<ProductWithCategory[]> {
-    // Reuse the robust search logic
-    return this.searchProducts(query)
+  async searchProductsWithPriority(query: string, userId: string): Promise<ProductWithCategory[]> {
+    return this.searchProducts(query, userId)
   }
 
   /**
@@ -200,71 +208,59 @@ class ProductService {
   /**
    * Add an alias to a product
    */
-  async addAlias(productId: string, newAlias: string): Promise<void> {
-    // Get current product
-    const { data: product, error: getError } = await (supabase as any)
+  async addAlias(productId: string, newAlias: string, userId: string): Promise<void> {
+    const alias = newAlias.trim()
+    if (!alias) return
+
+    // Fetch existing aliases
+    const { data: product, error: getError } = await supabase
       .from('products')
       .select('aliases')
       .eq('id', productId)
+      .eq('user_id', userId)
       .single()
 
     if (getError) throw getError
     if (!product) throw new Error('Product not found')
 
-    // Add new alias to array if not already present
-    const currentAliases = (product.aliases as any[]) || []
-    const lowerNewAlias = newAlias.toLowerCase().trim()
-    
-    if (!currentAliases.some((a: any) => a.toLowerCase() === lowerNewAlias)) {
-      currentAliases.push(lowerNewAlias)
-    }
+    const currentAliases = Array.isArray((product as any).aliases) ? (product as any).aliases as string[] : []
+    if (currentAliases.some(a => a.toLowerCase() === alias.toLowerCase())) return
+    const updatedAliases = [...currentAliases, alias]
 
-    // Update product
     const { error: updateError } = await (supabase as any)
       .from('products')
-      .update({
-        aliases: currentAliases,
-        updated_at: new Date().toISOString()
-      })
+      .update({ aliases: updatedAliases, updated_at: new Date().toISOString() } as any)
       .eq('id', productId)
-
+      .eq('user_id', userId)
     if (updateError) throw updateError
   }
 
   /**
    * Remove an alias from a product
    */
-  async removeAlias(productId: string, aliasToRemove: string): Promise<void> {
-    // Get current product
-    const { data: product, error: getError } = await (supabase as any)
+  async removeAlias(productId: string, aliasToRemove: string, userId: string): Promise<void> {
+    const { data: product, error: getError } = await supabase
       .from('products')
       .select('aliases')
       .eq('id', productId)
+      .eq('user_id', userId)
       .single()
 
     if (getError) throw getError
     if (!product) throw new Error('Product not found')
 
-    // Remove alias from array
-    const currentAliases = (product.aliases as any[]) || []
-    const lowerRemove = aliasToRemove.toLowerCase()
-    const updatedAliases = currentAliases.filter(
-      (a: any) => a.toLowerCase() !== lowerRemove
-    )
+    const currentAliases = Array.isArray((product as any).aliases) ? (product as any).aliases as string[] : []
+    const updatedAliases = currentAliases.filter(a => a.toLowerCase() !== aliasToRemove.toLowerCase())
 
-    // Update product
     const { error: updateError } = await (supabase as any)
       .from('products')
-      .update({
-        aliases: updatedAliases,
-        updated_at: new Date().toISOString()
-      })
+      .update({ aliases: updatedAliases, updated_at: new Date().toISOString() } as any)
       .eq('id', productId)
-
+      .eq('user_id', userId)
     if (updateError) throw updateError
   }
 
-  async getById(id: string): Promise<ProductWithCategory | null> {
+  async getById(id: string, userId: string): Promise<ProductWithCategory | null> {
     const { data, error } = await supabase
       .from('products')
       .select(`
@@ -272,16 +268,17 @@ class ProductService {
         category:categories(id, name, icon, color)
       `)
       .eq('id', id)
+      .eq('user_id', userId)
       .single()
 
     if (error) throw error
     return data as ProductWithCategory
   }
 
-  async create(product: ProductInsert): Promise<Product> {
+  async create(product: ProductInput, userId: string): Promise<Product> {
     const { data, error } = await supabase
       .from('products')
-      .insert(product as any)
+      .insert({ ...product, user_id: userId } as any)
       .select()
       .single()
 
@@ -289,9 +286,10 @@ class ProductService {
     return data
   }
 
-  async update(id: string, updates: ProductUpdate, userId?: string): Promise<Product> {
+  async update(id: string, updates: ProductUpdateInput, userId: string): Promise<Product> {
     const updateData: ProductUpdate = {
       ...updates,
+      user_id: userId,
     }
 
     // If category is being changed, mark as reviewed
@@ -307,6 +305,7 @@ class ProductService {
       .from('products')
       .update(updateData as any)
       .eq('id', id)
+      .eq('user_id', userId)
       .select()
       .single()
 
@@ -314,11 +313,12 @@ class ProductService {
     return data
   }
 
-  async delete(id: string): Promise<void> {
+  async delete(id: string, userId: string): Promise<void> {
     const { error, data } = await (supabase as any)
       .from('products')
       .delete()
       .eq('id', id)
+      .eq('user_id', userId)
 
     if (error) {
       console.error('Delete error:', error)
@@ -328,7 +328,7 @@ class ProductService {
     console.log('Delete response:', data)
   }
 
-  async bulkUpdateCategory(productIds: string[], categoryId: string, userId?: string): Promise<void> {
+  async bulkUpdateCategory(productIds: string[], categoryId: string, userId: string): Promise<void> {
     const { error } = await (supabase as any)
       .from('products')
       .update({
@@ -338,6 +338,7 @@ class ProductService {
         last_reviewed_by: userId,
       } as any)
       .in('id', productIds)
+      .eq('user_id', userId)
 
     if (error) throw error
   }

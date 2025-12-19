@@ -97,7 +97,8 @@ export default function TicketsPage() {
   const loadAllProducts = async () => {
     try {
       const productService = (await import('../services/productService')).default
-      const products = await productService.getAll()
+      if (!user?.id) return
+      const products = await productService.getAll(user.id)
       setAvailableProducts(products)
     } catch (error) {
       console.error('Error loading products:', error)
@@ -283,8 +284,9 @@ export default function TicketsPage() {
     }
 
     try {
+      if (!user?.id) return
       const productService = (await import('../services/productService')).default
-      const results = await productService.searchProducts(query)
+      const results = await productService.searchProducts(query, user.id)
       setAvailableProducts(results)
     } catch (error) {
       console.error('Error searching products:', error)
@@ -651,7 +653,7 @@ export default function TicketsPage() {
 
       // Cargar todos los productos para buscar coincidencias
       const productService = (await import('../services/productService')).default
-      const allProducts = await productService.getAll()
+      const allProducts = await productService.getAll(user.id)
 
       // Convertir productos parseados a formato ManualProduct
       const products: ManualProduct[] = parsedData.products.map((p, index) => {

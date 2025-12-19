@@ -1,6 +1,7 @@
 import { useState } from 'react'
 import { Plus, Trash2 } from 'lucide-react'
 import productService from '../services/productService'
+import { useAuthStore } from '../stores/authStore'
 
 interface AliasManagerProps {
   productId: string
@@ -9,6 +10,7 @@ interface AliasManagerProps {
 }
 
 export default function AliasManager({ productId, aliases: initialAliases, onUpdated }: AliasManagerProps) {
+  const { user } = useAuthStore()
   const [aliases, setAliases] = useState<string[]>(initialAliases || [])
   const [newAlias, setNewAlias] = useState('')
   const [loading, setLoading] = useState(false)
@@ -20,7 +22,8 @@ export default function AliasManager({ productId, aliases: initialAliases, onUpd
     setLoading(true)
     setError(null)
     try {
-      await productService.addAlias(productId, newAlias.trim())
+      if (!user?.id) return
+      await productService.addAlias(productId, newAlias.trim(), user.id)
       setAliases([...aliases, newAlias.trim()])
       setNewAlias('')
       onUpdated()
@@ -35,7 +38,8 @@ export default function AliasManager({ productId, aliases: initialAliases, onUpd
     setLoading(true)
     setError(null)
     try {
-      await productService.removeAlias(productId, aliasToRemove)
+      if (!user?.id) return
+      await productService.removeAlias(productId, aliasToRemove, user.id)
       setAliases(aliases.filter(a => a !== aliasToRemove))
       onUpdated()
     } catch (err) {

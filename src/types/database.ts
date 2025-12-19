@@ -119,6 +119,7 @@ export interface Database {
       }
       categories: {
         Row: {
+          user_id: string
           id: string
           name: string
           description: string | null
@@ -129,6 +130,7 @@ export interface Database {
           updated_at: string
         }
         Insert: {
+          user_id: string
           id?: string
           name: string
           description?: string | null
@@ -139,6 +141,7 @@ export interface Database {
           updated_at?: string
         }
         Update: {
+          user_id?: string
           id?: string
           name?: string
           description?: string | null
@@ -151,6 +154,7 @@ export interface Database {
       }
       products: {
         Row: {
+          user_id: string
           id: string
           name: string
           aliases: string[] | null
@@ -162,6 +166,7 @@ export interface Database {
           updated_at: string
         }
         Insert: {
+          user_id: string
           id?: string
           name: string
           aliases?: string[] | null
@@ -173,6 +178,7 @@ export interface Database {
           updated_at?: string
         }
         Update: {
+          user_id?: string
           id?: string
           name?: string
           aliases?: string[] | null

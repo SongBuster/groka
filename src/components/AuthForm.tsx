@@ -83,7 +83,7 @@ export default function AuthForm() {
 
         {/* Right Side - Auth Form */}
         <div className="w-full">
-          <div className="bg-white rounded-2xl shadow-xl p-6 sm:p-8 lg:p-10">
+          <div className="bg-white rounded-2xl shadow-xl p-6 sm:p-8 lg:p-10" style={{ colorScheme: 'light' }}>
             {/* Mobile Header - solo visible en móvil */}
             <div className="lg:hidden text-center mb-6">
               <h1 className="text-3xl sm:text-4xl font-bold text-primary-700 mb-2">
@@ -115,7 +115,7 @@ export default function AuthForm() {
                     type="email"
                     value={email}
                     onChange={(e) => setEmail(e.target.value)}
-                    className="w-full pl-11 pr-4 py-3 border border-gray-300 rounded-xl focus:ring-2 focus:ring-primary-500 focus:border-transparent transition-all"
+                    className="w-full pl-11 pr-4 py-3 border border-gray-300 rounded-xl focus:ring-2 focus:ring-primary-500 focus:border-transparent transition-all text-gray-900 placeholder-gray-400 bg-white"
                     placeholder="tu@email.com"
                     required
                   />
@@ -133,7 +133,7 @@ export default function AuthForm() {
                     type="password"
                     value={password}
                     onChange={(e) => setPassword(e.target.value)}
-                    className="w-full pl-11 pr-4 py-3 border border-gray-300 rounded-xl focus:ring-2 focus:ring-primary-500 focus:border-transparent transition-all"
+                    className="w-full pl-11 pr-4 py-3 border border-gray-300 rounded-xl focus:ring-2 focus:ring-primary-500 focus:border-transparent transition-all text-gray-900 placeholder-gray-400 bg-white"
                     placeholder="••••••••"
                     required
                     minLength={6}
