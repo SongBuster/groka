@@ -20,6 +20,7 @@ export type ShoppingListItem = {
   quantity: number
   purchased: boolean
   position: number
+  notes: string | null
   created_at: string
   updated_at: string
   category?: { id: string; name: string; icon: string | null; color: string | null } | null
@@ -34,6 +35,17 @@ class ShoppingListService {
       .order('updated_at', { ascending: false })
     if (error) throw error
     return (data as any[]) || []
+  }
+
+  async getUnpurchasedItemCount(listId: string, userId: string): Promise<number> {
+    const { count, error } = await supabase
+      .from('shopping_list_items')
+      .select('*', { count: 'exact' })
+      .eq('list_id', listId)
+      .eq('user_id', userId)
+      .eq('purchased', false)
+    if (error) throw error
+    return count || 0
   }
 
   async createList(name: string, userId: string): Promise<ShoppingList> {
@@ -87,7 +99,7 @@ class ShoppingListService {
     return data as ShoppingListItem
   }
 
-  async updateItem(itemId: string, updates: Partial<Pick<ShoppingListItem,'name'|'quantity'|'purchased'|'category_id'>>, userId: string): Promise<void> {
+  async updateItem(itemId: string, updates: Partial<Pick<ShoppingListItem,'name'|'quantity'|'purchased'|'category_id'|'notes'>>, userId: string): Promise<void> {
     const { error } = await (supabase as any)
       .from('shopping_list_items')
       .update({ ...updates, updated_at: new Date().toISOString() } as any)
@@ -138,6 +150,19 @@ class ShoppingListService {
       }
     }
     return unique
+  }
+
+  async getRecentlyPurchasedItems(listId: string, userId: string, limit: number = 10): Promise<ShoppingListItem[]> {
+    const { data, error } = await supabase
+      .from('shopping_list_items')
+      .select('*, category:categories(id,name,icon,color)')
+      .eq('list_id', listId)
+      .eq('user_id', userId)
+      .eq('purchased', true)
+      .order('updated_at', { ascending: false })
+      .limit(limit)
+    if (error) throw error
+    return (data as any[]) || []
   }
 }
 
