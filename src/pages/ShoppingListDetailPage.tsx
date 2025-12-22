@@ -1,7 +1,8 @@
-import { useEffect, useMemo, useState } from 'react'
+import { useEffect, useMemo, useState, useRef } from 'react'
 import { useParams, Link } from 'react-router-dom'
 import { useAuthStore } from '../stores/authStore'
 import shoppingListService, { type ShoppingListItem } from '../services/shoppingListService'
+import productService, { type ProductWithCategory } from '../services/productService'
 import { useDialog } from '../hooks/useDialog'
 import { Plus, Trash2, Edit2, ChevronDown, ChevronRight } from 'lucide-react'
 
@@ -21,6 +22,11 @@ export default function ShoppingListDetailPage() {
   const [editCategory, setEditCategory] = useState<string | null>(null)
   const [editNotes, setEditNotes] = useState('')
   const [collapsed, setCollapsed] = useState<Record<string, boolean>>({})
+  const [suggestions, setSuggestions] = useState<ProductWithCategory[]>([])
+  const [showSuggestions, setShowSuggestions] = useState(false)
+  const [selectedIndex, setSelectedIndex] = useState(-1)
+  const inputRef = useRef<HTMLInputElement>(null)
+  const suggestionsRef = useRef<HTMLDivElement>(null)
 
   const load = async () => {
     if (!user?.id || !id) return
@@ -43,6 +49,47 @@ export default function ShoppingListDetailPage() {
 
   useEffect(() => { load() }, [user?.id, id])
 
+  // Search products when input changes
+  useEffect(() => {
+    const searchProducts = async () => {
+      if (!user?.id || input.trim().length < 3) {
+        setSuggestions([])
+        setShowSuggestions(false)
+        return
+      }
+
+      try {
+        const results = await productService.searchProducts(input.trim(), user.id)
+        setSuggestions(results)
+        setShowSuggestions(results.length > 0)
+        setSelectedIndex(-1)
+      } catch (e) {
+        console.error('Error searching products:', e)
+        setSuggestions([])
+      }
+    }
+
+    const debounce = setTimeout(searchProducts, 300)
+    return () => clearTimeout(debounce)
+  }, [input, user?.id])
+
+  // Close suggestions when clicking outside
+  useEffect(() => {
+    const handleClickOutside = (e: MouseEvent) => {
+      if (
+        suggestionsRef.current &&
+        !suggestionsRef.current.contains(e.target as Node) &&
+        inputRef.current &&
+        !inputRef.current.contains(e.target as Node)
+      ) {
+        setShowSuggestions(false)
+      }
+    }
+
+    document.addEventListener('mousedown', handleClickOutside)
+    return () => document.removeEventListener('mousedown', handleClickOutside)
+  }, [])
+
   const grouped = useMemo(() => {
     const groups: Record<string, { name: string; color: string | null; icon: string | null; items: ShoppingListItem[] }> = {}
     for (const it of items) {
@@ -62,10 +109,52 @@ export default function ShoppingListDetailPage() {
       await shoppingListService.addItem(id, input.trim(), quantity || 1, user.id)
       setInput('')
       setQuantity(1)
+      setSuggestions([])
+      setShowSuggestions(false)
       await load()
     } catch (e) {
       console.error(e)
       alert({ title: 'Error', message: 'No se pudo añadir el producto', type: 'error' })
+    }
+  }
+
+  const selectSuggestion = (product: ProductWithCategory) => {
+    setInput(product.name)
+    setShowSuggestions(false)
+    setSuggestions([])
+    setSelectedIndex(-1)
+    inputRef.current?.focus()
+  }
+
+  const handleInputKeyDown = (e: React.KeyboardEvent) => {
+    if (!showSuggestions || suggestions.length === 0) {
+      if (e.key === 'Enter') {
+        addItem()
+      }
+      return
+    }
+
+    switch (e.key) {
+      case 'ArrowDown':
+        e.preventDefault()
+        setSelectedIndex(prev => (prev < suggestions.length - 1 ? prev + 1 : prev))
+        break
+      case 'ArrowUp':
+        e.preventDefault()
+        setSelectedIndex(prev => (prev > 0 ? prev - 1 : -1))
+        break
+      case 'Enter':
+        e.preventDefault()
+        if (selectedIndex >= 0) {
+          selectSuggestion(suggestions[selectedIndex])
+        } else {
+          addItem()
+        }
+        break
+      case 'Escape':
+        setShowSuggestions(false)
+        setSelectedIndex(-1)
+        break
     }
   }
 
@@ -223,7 +312,7 @@ export default function ShoppingListDetailPage() {
                     onDragOver={handleDragOver}
                     onDrop={(e) => handleDrop(e, item.id)}
                     onClick={() => markPurchased(item)}
-                    className={`flex items-center justify-between rounded-xl p-4 border cursor-move transition ${draggedId === item.id ? 'opacity-50 bg-secondary-50' : ''} bg-red-100 border-red-300 hover:bg-red-200`}
+                    className={`flex items-center justify-between rounded-xl p-2 border cursor-move transition ${draggedId === item.id ? 'opacity-50 bg-secondary-50' : ''} bg-red-100 border-red-300 hover:bg-red-200`}
                   >
                     <div className="flex items-center gap-3 flex-1">
                       <div className="flex-1 min-w-0">
@@ -267,7 +356,7 @@ export default function ShoppingListDetailPage() {
                   <div
                     key={item.id}
                     onClick={() => markUnpurchased(item)}
-                    className="flex items-center justify-between rounded-xl p-4 border cursor-pointer transition bg-green-100 border-green-300 hover:bg-green-200"
+                    className="flex items-center justify-between rounded-xl p-2 border cursor-pointer transition bg-green-100 border-green-300 hover:bg-green-200"
                   >
                     <div className="flex items-center gap-3 flex-1">
                       <div className="flex-1 min-w-0">
@@ -366,45 +455,105 @@ export default function ShoppingListDetailPage() {
 
       {/* Add bar - Desktop */}
       <div className="hidden md:block fixed bottom-0 left-0 right-0 bg-white border-t border-secondary-200 p-3 z-20">
-        <div className="max-w-3xl mx-auto flex items-center gap-2">
-          <input
-            value={input}
-            onChange={(e) => setInput(e.target.value)}
-            placeholder="Necesito…"
-            className="flex-1 px-4 py-2 border border-secondary-300 rounded-lg text-secondary-900 placeholder-secondary-500"
-          />
-          <input
-            type="number"
-            value={quantity}
-            min={1}
-            onChange={(e) => setQuantity(parseInt(e.target.value) || 1)}
-            className="w-20 px-3 py-2 border border-secondary-300 rounded-lg text-secondary-900"
-          />
-          <button onClick={addItem} className="px-4 py-2 bg-primary-600 text-white rounded-lg flex items-center gap-2 hover:bg-primary-700">
-            <Plus className="w-5 h-5" /> Añadir
-          </button>
+        <div className="max-w-3xl mx-auto relative">
+          <div className="flex items-center gap-2">
+            <div className="flex-1 relative">
+              <input
+                ref={inputRef}
+                value={input}
+                onChange={(e) => setInput(e.target.value)}
+                onKeyDown={handleInputKeyDown}
+                onFocus={() => input.trim().length >= 3 && suggestions.length > 0 && setShowSuggestions(true)}
+                placeholder="Necesito…"
+                className="w-full px-4 py-2 border border-secondary-300 rounded-lg text-secondary-900 placeholder-secondary-500 focus:outline-none focus:ring-2 focus:ring-primary-500"
+              />
+              {showSuggestions && suggestions.length > 0 && (
+                <div 
+                  ref={suggestionsRef}
+                  className="absolute bottom-full left-0 right-0 mb-2 bg-white border border-secondary-300 rounded-lg shadow-lg max-h-64 overflow-y-auto z-30"
+                >
+                  {suggestions.map((product, idx) => (
+                    <button
+                      key={product.id}
+                      onClick={() => selectSuggestion(product)}
+                      className={`w-full text-left px-4 py-2 hover:bg-secondary-100 transition ${
+                        idx === selectedIndex ? 'bg-primary-50' : ''
+                      } ${idx === 0 ? 'rounded-t-lg' : ''} ${idx === suggestions.length - 1 ? 'rounded-b-lg' : ''} border-b border-secondary-100 last:border-b-0`}
+                    >
+                      <div className="font-medium text-secondary-900">{product.name}</div>
+                      {product.category && (
+                        <div className="text-xs text-secondary-600">
+                          {product.category.icon} {product.category.name}
+                        </div>
+                      )}
+                    </button>
+                  ))}
+                </div>
+              )}
+            </div>
+            <input
+              type="number"
+              value={quantity}
+              min={1}
+              onChange={(e) => setQuantity(parseInt(e.target.value) || 1)}
+              className="w-20 px-3 py-2 border border-secondary-300 rounded-lg text-secondary-900"
+            />
+            <button onClick={addItem} className="px-4 py-2 bg-primary-600 text-white rounded-lg flex items-center gap-2 hover:bg-primary-700">
+              <Plus className="w-5 h-5" /> Añadir
+            </button>
+          </div>
         </div>
       </div>
 
       {/* Add bar - Mobile */}
       <div className="md:hidden fixed bottom-20 left-0 right-0 bg-white border-t border-secondary-200 p-3 z-20">
-        <div className="flex items-center gap-2">
-          <input
-            value={input}
-            onChange={(e) => setInput(e.target.value)}
-            placeholder="Necesito…"
-            className="flex-1 px-4 py-2 border border-secondary-300 rounded-lg text-secondary-900 placeholder-secondary-500"
-          />
-          <input
-            type="number"
-            value={quantity}
-            min={1}
-            onChange={(e) => setQuantity(parseInt(e.target.value) || 1)}
-            className="w-16 px-2 py-2 border border-secondary-300 rounded-lg text-secondary-900 text-sm"
-          />
-          <button onClick={addItem} className="px-3 py-2 bg-primary-600 text-white rounded-lg flex items-center gap-1 hover:bg-primary-700 whitespace-nowrap">
-            <Plus className="w-5 h-5" /> Añadir
-          </button>
+        <div className="relative">
+          <div className="flex items-center gap-2">
+            <div className="flex-1 relative">
+              <input
+                ref={inputRef}
+                value={input}
+                onChange={(e) => setInput(e.target.value)}
+                onKeyDown={handleInputKeyDown}
+                onFocus={() => input.trim().length >= 3 && suggestions.length > 0 && setShowSuggestions(true)}
+                placeholder="Necesito…"
+                className="w-full px-4 py-2 border border-secondary-300 rounded-lg text-secondary-900 placeholder-secondary-500 focus:outline-none focus:ring-2 focus:ring-primary-500"
+              />
+              {showSuggestions && suggestions.length > 0 && (
+                <div 
+                  ref={suggestionsRef}
+                  className="absolute bottom-full left-0 right-0 mb-2 bg-white border border-secondary-300 rounded-lg shadow-lg max-h-60 overflow-y-auto z-30"
+                >
+                  {suggestions.map((product, idx) => (
+                    <button
+                      key={product.id}
+                      onClick={() => selectSuggestion(product)}
+                      className={`w-full text-left px-3 py-2 hover:bg-secondary-100 transition ${
+                        idx === selectedIndex ? 'bg-primary-50' : ''
+                      } ${idx === 0 ? 'rounded-t-lg' : ''} ${idx === suggestions.length - 1 ? 'rounded-b-lg' : ''} border-b border-secondary-100 last:border-b-0`}
+                    >
+                      <div className="font-medium text-secondary-900 text-sm">{product.name}</div>
+                      {product.category && (
+                        <div className="text-xs text-secondary-600">
+                          {product.category.icon} {product.category.name}
+                        </div>
+                      )}
+                    </button>
+                  ))}
+                </div>
+              )}
+            </div>
+            <input
+              type="number"
+              value={quantity}
+              min={1}
+              onChange={(e) => setQuantity(parseInt(e.target.value) || 1)}
+              className="w-16 px-2 py-2 border border-secondary-300 rounded-lg text-secondary-900 text-sm"
+            />
+            <button onClick={addItem} className="px-3 py-2 bg-primary-600 text-white rounded-lg flex items-center gap-1 hover:bg-primary-700 whitespace-nowrap">
+              <Plus className="w-5 h-5" /> Añadir
+            </button>
+          </div>
         </div>
       </div>
 
