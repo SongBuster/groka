@@ -3,8 +3,11 @@ import { useParams, Link } from 'react-router-dom'
 import { useAuthStore } from '../stores/authStore'
 import shoppingListService, { type ShoppingListItem } from '../services/shoppingListService'
 import productService, { type ProductWithCategory } from '../services/productService'
+import smartSuggestionsService, { type ProductSuggestion } from '../services/smartSuggestionsService'
 import { useDialog } from '../hooks/useDialog'
-import { Plus, Trash2, Edit2, ChevronDown, ChevronRight } from 'lucide-react'
+import CustomSelect from '../components/CustomSelect'
+import NumericKeyboardModal from '../components/NumericKeyboardModal'
+import { Plus, Trash2, Edit2, ChevronDown, ChevronRight, Sparkles } from 'lucide-react'
 
 export default function ShoppingListDetailPage() {
   const { id } = useParams()
@@ -27,9 +30,20 @@ export default function ShoppingListDetailPage() {
   const [selectedIndex, setSelectedIndex] = useState(-1)
   const inputRef = useRef<HTMLInputElement>(null)
   const suggestionsRef = useRef<HTMLDivElement>(null)
+  const [smartSuggestions, setSmartSuggestions] = useState<ProductSuggestion[]>([])
+  const [showSmartSuggestions, setShowSmartSuggestions] = useState(false)
+  const [loadingSmartSuggestions, setLoadingSmartSuggestions] = useState(false)
+  const [showQuantityKeyboard, setShowQuantityKeyboard] = useState(false)
+  const scrollPositionRef = useRef<number>(0)
 
-  const load = async () => {
+  const load = async (preserveScroll = false) => {
     if (!user?.id || !id) return
+    
+    // Guardar posición de scroll si se solicita
+    if (preserveScroll) {
+      scrollPositionRef.current = window.scrollY
+    }
+    
     setLoading(true)
     try {
       const [data, cats, purchased] = await Promise.all([
@@ -40,6 +54,13 @@ export default function ShoppingListDetailPage() {
       setItems(data)
       setCategories(cats)
       setRecentlyPurchased(purchased)
+      
+      // Restaurar posición de scroll si se guardó
+      if (preserveScroll) {
+        requestAnimationFrame(() => {
+          window.scrollTo(0, scrollPositionRef.current)
+        })
+      }
     } catch (e) {
       console.error(e)
     } finally {
@@ -47,7 +68,25 @@ export default function ShoppingListDetailPage() {
     }
   }
 
-  useEffect(() => { load() }, [user?.id, id])
+  const loadSmartSuggestions = async () => {
+    if (!user?.id || !id) return
+    setLoadingSmartSuggestions(true)
+    try {
+      console.log('🔄 Recargando sugerencias inteligentes...')
+      const suggestions = await smartSuggestionsService.getTopSuggestions(user.id, id, 15)
+      console.log('✅ Sugerencias cargadas:', suggestions.length)
+      setSmartSuggestions(suggestions)
+    } catch (e) {
+      console.error('Error loading smart suggestions:', e)
+    } finally {
+      setLoadingSmartSuggestions(false)
+    }
+  }
+
+  useEffect(() => { 
+    load()
+    loadSmartSuggestions()
+  }, [user?.id, id])
 
   // Search products when input changes
   useEffect(() => {
@@ -59,9 +98,36 @@ export default function ShoppingListDetailPage() {
       }
 
       try {
-        const results = await productService.searchProducts(input.trim(), user.id)
-        setSuggestions(results)
-        setShowSuggestions(results.length > 0)
+        const query = input.trim().toLowerCase()
+        
+        // Buscar en el catálogo de productos
+        const catalogResults = await productService.searchProducts(input.trim(), user.id)
+        
+        // Buscar también en productos utilizados recientemente
+        const recentMatches = recentlyPurchased
+          .filter(item => item.name.toLowerCase().includes(query))
+          .map(item => ({
+            id: item.product_id || item.id,
+            user_id: user.id,
+            name: item.name,
+            aliases: null,
+            category_id: item.category_id,
+            review_status: 'reviewed' as const,
+            last_reviewed_at: null,
+            last_reviewed_by: null,
+            created_at: item.created_at,
+            updated_at: item.updated_at,
+            category: item.category
+          } as ProductWithCategory))
+        
+        // Combinar resultados, evitando duplicados (priorizar catálogo)
+        const catalogNames = new Set(catalogResults.map(r => r.name.toLowerCase()))
+        const uniqueRecent = recentMatches.filter(r => !catalogNames.has(r.name.toLowerCase()))
+        
+        const allResults = [...catalogResults, ...uniqueRecent]
+        
+        setSuggestions(allResults)
+        setShowSuggestions(allResults.length > 0)
         setSelectedIndex(-1)
       } catch (e) {
         console.error('Error searching products:', e)
@@ -71,7 +137,7 @@ export default function ShoppingListDetailPage() {
 
     const debounce = setTimeout(searchProducts, 300)
     return () => clearTimeout(debounce)
-  }, [input, user?.id])
+  }, [input, user?.id, recentlyPurchased])
 
   // Close suggestions when clicking outside
   useEffect(() => {
@@ -106,24 +172,69 @@ export default function ShoppingListDetailPage() {
   const addItem = async () => {
     if (!user?.id || !id || !input.trim()) return
     try {
-      await shoppingListService.addItem(id, input.trim(), quantity || 1, user.id)
+      // Verificar si el producto ya existe en la lista (como comprado)
+      const normalizedInput = input.trim().toLowerCase()
+      const existingItem = [...items, ...recentlyPurchased].find(
+        item => item.name.toLowerCase() === normalizedInput
+      )
+      
+      if (existingItem && existingItem.purchased) {
+        // Si ya existe como comprado, marcarlo como no comprado
+        await shoppingListService.updateItem(
+          existingItem.id,
+          { purchased: false, quantity: quantity || 1 },
+          user.id
+        )
+      } else if (!existingItem) {
+        // Si no existe, crear uno nuevo
+        await shoppingListService.addItem(id, input.trim(), quantity || 1, user.id)
+      }
+      // Si existe pero no está comprado, no hacer nada (evitar duplicados)
+      
       setInput('')
       setQuantity(1)
       setSuggestions([])
       setShowSuggestions(false)
-      await load()
+      // Recargar ambas listas en paralelo
+      await Promise.all([load(), loadSmartSuggestions()])
     } catch (e) {
       console.error(e)
       alert({ title: 'Error', message: 'No se pudo añadir el producto', type: 'error' })
     }
   }
 
-  const selectSuggestion = (product: ProductWithCategory) => {
-    setInput(product.name)
+  const addSmartSuggestion = async (suggestion: ProductSuggestion) => {
+    if (!user?.id || !id) return
+    
+    // Eliminar optimistamente de las sugerencias
+    setSmartSuggestions(prev => prev.filter(s => s.product_id !== suggestion.product_id))
+    
+    try {
+      await shoppingListService.addItem(id, suggestion.product_name, 1, user.id)
+      // Recargar ambas listas en paralelo
+      await Promise.all([load(), loadSmartSuggestions()])
+    } catch (e) {
+      console.error(e)
+      alert({ title: 'Error', message: 'No se pudo añadir el producto', type: 'error' })
+      // Si falla, recargar las sugerencias originales
+      await loadSmartSuggestions()
+    }
+  }
+
+  const selectSuggestion = async (product: ProductWithCategory) => {
+    if (!user?.id || !id) return
     setShowSuggestions(false)
     setSuggestions([])
     setSelectedIndex(-1)
-    inputRef.current?.focus()
+    setInput('')
+    try {
+      await shoppingListService.addItem(id, product.name, quantity || 1, user.id)
+      setQuantity(1)
+      await Promise.all([load(), loadSmartSuggestions()])
+    } catch (e) {
+      console.error(e)
+      alert({ title: 'Error', message: 'No se pudo añadir el producto', type: 'error' })
+    }
   }
 
   const handleInputKeyDown = (e: React.KeyboardEvent) => {
@@ -173,7 +284,7 @@ export default function ShoppingListDetailPage() {
     try {
       if (item.purchased) return
       await shoppingListService.updateItem(item.id, { purchased: true }, user.id)
-      await load()
+      await Promise.all([load(true), loadSmartSuggestions()])
     } catch (e) {
       console.error(e)
     }
@@ -194,7 +305,7 @@ export default function ShoppingListDetailPage() {
     if (!ok || !user?.id) return
     try {
       await shoppingListService.deleteItem(item.id, user.id)
-      await load()
+      await Promise.all([load(true), loadSmartSuggestions()])
     } catch (e) {
       console.error(e)
     }
@@ -267,7 +378,7 @@ export default function ShoppingListDetailPage() {
         { purchased: false, quantity: 1, notes: null },
         user.id
       )
-      await load()
+      await Promise.all([load(), loadSmartSuggestions()])
     } catch (e) {
       console.error(e)
     }
@@ -298,7 +409,7 @@ export default function ShoppingListDetailPage() {
                   onClick={() => setCollapsed(prev => ({ ...prev, [key]: !prev[key] }))}
                 >
                   <CountIcon className="w-4 h-4 text-secondary-700" />
-                  <span className="text-lg font-semibold text-secondary-900">
+                  <span className="text-sm text-base font-semibold text-secondary-900">
                     {g.icon} {g.name} ({unpurchasedItems.length})
                   </span>
                 </button>
@@ -346,6 +457,68 @@ export default function ShoppingListDetailPage() {
               </div>
             )
           })}
+
+          {/* Smart Suggestions Section */}
+          {smartSuggestions.length > 0 && (
+            <div>
+              <button
+                className="w-full text-left mb-3 flex items-center gap-2"
+                onClick={() => setShowSmartSuggestions(!showSmartSuggestions)}
+              >
+                {showSmartSuggestions ? <ChevronDown className="w-4 h-4 text-primary-600" /> : <ChevronRight className="w-4 h-4 text-primary-600" />}
+                <Sparkles className="w-5 h-5 text-primary-600" />
+                <span className="text-lg font-semibold text-primary-700">
+                  Sugerencias inteligentes ({smartSuggestions.length})
+                </span>
+              </button>
+              {showSmartSuggestions && (
+                <div className="space-y-2 mb-4">
+                  <p className="text-sm text-secondary-600 mb-3 px-1">
+                    Basadas en tu historial de compras
+                  </p>
+                  {smartSuggestions.map((suggestion) => (
+                    <div
+                      key={suggestion.product_id}
+                      className="flex items-center justify-between rounded-xl p-2 border cursor-pointer transition bg-gradient-to-r from-primary-50 to-purple-50 border-primary-200 hover:from-primary-100 hover:to-purple-100"
+                      onClick={() => addSmartSuggestion(suggestion)}
+                    >
+                      <div className="flex items-center gap-3 flex-1 min-w-0">
+                        <div className="flex-1 min-w-0">
+                          <div className="font-medium text-secondary-900 flex items-center gap-2">
+                            {suggestion.product_name}
+                            {suggestion.urgency_score >= 1.5 && (
+                              <span className="text-xs px-2 py-0.5 bg-red-100 text-red-700 rounded-full">
+                                Urgente
+                              </span>
+                            )}
+                          </div>
+                          <div className="text-xs text-secondary-600">
+                            {suggestion.category_icon && `${suggestion.category_icon} `}
+                            Compras cada {suggestion.average_days_between_purchases} días • 
+                            Última compra hace {suggestion.days_since_last_purchase} días
+                          </div>
+                        </div>
+                      </div>
+                      <div className="flex-shrink-0">
+                        <button 
+                          className="p-2 text-primary-700 hover:bg-primary-100 rounded-lg transition"
+                          title="Añadir a la lista"
+                        >
+                          <Plus className="w-4 h-4" />
+                        </button>
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              )}
+            </div>
+          )}
+
+          {loadingSmartSuggestions && (
+            <div className="text-secondary-600 text-sm text-center py-2">
+              <Sparkles className="w-4 h-4 inline animate-pulse" /> Analizando patrones de compra...
+            </div>
+          )}
 
           {/* Recently purchased section below all categories */}
           {recentlyPurchased.length > 0 && (
@@ -409,16 +582,15 @@ export default function ShoppingListDetailPage() {
               {/* Category */}
               <div className="mb-4">
                 <label className="block text-sm font-medium text-secondary-900 mb-2">Categoría</label>
-                <select 
-                  value={editCategory || ''} 
-                  onChange={(e) => setEditCategory(e.target.value || null)} 
-                  className="w-full px-4 py-2 border border-secondary-300 rounded-lg text-secondary-900 focus:outline-none focus:ring-2 focus:ring-primary-500"
-                >
-                  <option value="">Sin categoría</option>
-                  {categories.map((c) => (
-                    <option key={c.id} value={c.id}>{c.icon} {c.name}</option>
-                  ))}
-                </select>
+                <CustomSelect
+                  options={[
+                    { value: '', label: 'Sin categoría' },
+                    ...categories.map(c => ({ value: c.id, label: `${c.icon} ${c.name}` }))
+                  ]}
+                  value={editCategory || ''}
+                  onChange={(value) => setEditCategory(value || null)}
+                  placeholder="Sin categoría"
+                />
               </div>
 
               {/* Notes */}
@@ -491,13 +663,12 @@ export default function ShoppingListDetailPage() {
                 </div>
               )}
             </div>
-            <input
-              type="number"
-              value={quantity}
-              min={1}
-              onChange={(e) => setQuantity(parseInt(e.target.value) || 1)}
-              className="w-20 px-3 py-2 border border-secondary-300 rounded-lg text-secondary-900"
-            />
+            <button
+              onClick={() => setShowQuantityKeyboard(true)}
+              className="w-16 px-3 py-2 border border-primary-300 bg-primary-50 rounded-lg text-primary-700 font-semibold hover:bg-primary-100 transition"
+            >
+              {quantity}
+            </button>
             <button onClick={addItem} className="px-4 py-2 bg-primary-600 text-white rounded-lg flex items-center gap-2 hover:bg-primary-700">
               <Plus className="w-5 h-5" /> Añadir
             </button>
@@ -543,13 +714,12 @@ export default function ShoppingListDetailPage() {
                 </div>
               )}
             </div>
-            <input
-              type="number"
-              value={quantity}
-              min={1}
-              onChange={(e) => setQuantity(parseInt(e.target.value) || 1)}
-              className="w-16 px-2 py-2 border border-secondary-300 rounded-lg text-secondary-900 text-sm"
-            />
+            <button
+              onClick={() => setShowQuantityKeyboard(true)}
+              className="w-14 px-2 py-2 border border-primary-300 bg-primary-50 rounded-lg text-primary-700 font-semibold text-sm hover:bg-primary-100 transition"
+            >
+              {quantity}
+            </button>
             <button onClick={addItem} className="px-3 py-2 bg-primary-600 text-white rounded-lg flex items-center gap-1 hover:bg-primary-700 whitespace-nowrap">
               <Plus className="w-5 h-5" /> Añadir
             </button>
@@ -559,6 +729,17 @@ export default function ShoppingListDetailPage() {
 
       {/* Spacer for mobile add bar + nav */}
       <div className="md:hidden h-40"></div>
+
+      {/* Numeric Keyboard Modal */}
+      <NumericKeyboardModal
+        isOpen={showQuantityKeyboard}
+        value={quantity}
+        onClose={() => setShowQuantityKeyboard(false)}
+        onConfirm={(value) => setQuantity(value)}
+        title="Cantidad"
+        minValue={1}
+        maxValue={999}
+      />
 
       <DialogComponent />
     </div>

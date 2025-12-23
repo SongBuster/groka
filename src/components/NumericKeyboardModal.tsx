@@ -21,15 +21,21 @@ export default function NumericKeyboardModal({
   maxValue = 999,
 }: NumericKeyboardModalProps) {
   const [displayValue, setDisplayValue] = useState(value.toString())
+  const [isFirstInput, setIsFirstInput] = useState(true)
 
   useEffect(() => {
     setDisplayValue(value.toString())
+    setIsFirstInput(true)
   }, [value, isOpen])
 
   if (!isOpen) return null
 
   const handleNumberClick = (num: string) => {
-    if (displayValue === '0') {
+    if (isFirstInput) {
+      // Primera pulsación: reemplazar el valor actual
+      setDisplayValue(num)
+      setIsFirstInput(false)
+    } else if (displayValue === '0') {
       setDisplayValue(num)
     } else if (displayValue.length < 3) {
       setDisplayValue(displayValue + num)
@@ -37,6 +43,7 @@ export default function NumericKeyboardModal({
   }
 
   const handleBackspace = () => {
+    setIsFirstInput(false)
     if (displayValue.length > 1) {
       setDisplayValue(displayValue.slice(0, -1))
     } else {
@@ -45,6 +52,7 @@ export default function NumericKeyboardModal({
   }
 
   const handleClear = () => {
+    setIsFirstInput(false)
     setDisplayValue('0')
   }
 
@@ -65,7 +73,7 @@ export default function NumericKeyboardModal({
   }
 
   return (
-    <div className="fixed inset-0 bg-black bg-opacity-50 flex items-end z-50">
+    <div className="fixed inset-0 backdrop-blur-sm bg-black/30 flex items-end z-50">
       <div className="bg-white w-full rounded-t-lg shadow-lg p-6">
         {/* Header */}
         <div className="flex items-center justify-between mb-6">
