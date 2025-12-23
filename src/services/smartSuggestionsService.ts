@@ -1,4 +1,5 @@
 import { supabase } from '../lib/supabase'
+import suggestionPreferencesService from './suggestionPreferencesService'
 
 export type ProductSuggestion = {
   product_id: string
@@ -116,15 +117,52 @@ class SmartSuggestionsService {
           intervals.push(daysBetween)
         }
 
-        // Promedio de días entre compras
-        const averageDays = intervals.reduce((a, b) => a + b, 0) / intervals.length
+        // === MEJORA 1: Ponderación por recencia ===
+        // Dar más peso a los intervalos más recientes (últimos 60% tienen más peso)
+        const recentWeight = 1.5  // Los recientes pesan 1.5x más
+        const recentCount = Math.ceil(intervals.length * 0.6) // Últimos 60%
+        
+        let weightedSum = 0
+        let totalWeight = 0
+        
+        intervals.forEach((interval, idx) => {
+          const isRecent = idx >= intervals.length - recentCount
+          const weight = isRecent ? recentWeight : 1.0
+          weightedSum += interval * weight
+          totalWeight += weight
+        })
+        
+        const averageDays = weightedSum / totalWeight
+
+        // === MEJORA 2: Calcular desviación estándar ===
+        const squaredDiffs = intervals.map(interval => Math.pow(interval - averageDays, 2))
+        const variance = squaredDiffs.reduce((a, b) => a + b, 0) / intervals.length
+        const stdDeviation = Math.sqrt(variance)
+        
+        // Coeficiente de variación (CV): mide irregularidad relativa
+        const coefficientOfVariation = stdDeviation / averageDays
+        
+        // === MEJORA 3: Factor de confianza basado en regularidad ===
+        // CV bajo = alta confianza, CV alto = baja confianza
+        let confidenceFactor = 1.0
+        if (coefficientOfVariation > 1.0) {
+          confidenceFactor = 0.6  // Muy irregular
+        } else if (coefficientOfVariation > 0.5) {
+          confidenceFactor = 0.8  // Bastante irregular
+        } else if (coefficientOfVariation > 0.3) {
+          confidenceFactor = 0.9  // Algo irregular
+        }
+        // Si CV <= 0.3, mantener 1.0 (muy regular)
 
         // Días desde última compra
         const lastPurchaseDate = sortedDates[sortedDates.length - 1]
         const daysSinceLast = (now.getTime() - lastPurchaseDate.getTime()) / (1000 * 60 * 60 * 24)
 
-        // Calcular urgency score
-        const urgencyScore = daysSinceLast / averageDays
+        // Calcular urgency score base
+        const baseUrgencyScore = daysSinceLast / averageDays
+        
+        // Aplicar factor de confianza
+        const urgencyScore = baseUrgencyScore * confidenceFactor
 
         // Solo sugerir si ha pasado suficiente tiempo
         if (urgencyScore >= urgencyThreshold) {
@@ -143,8 +181,12 @@ class SmartSuggestionsService {
         }
       }
 
-      // 4. Filtrar productos ya en la lista actual (si se proporciona)
-      let finalSuggestions = suggestions
+      // 4. Filtrar productos ocultos por el usuario
+      const hiddenProductIds = await suggestionPreferencesService.getHiddenProductIds(userId)
+      const suggestionsAfterHiding = suggestions.filter(s => !hiddenProductIds.has(s.product_id))
+
+      // 5. Filtrar productos ya en la lista actual (si se proporciona)
+      let finalSuggestions = suggestionsAfterHiding
       
       if (shoppingListId) {
         const { data: currentItems } = await supabase
@@ -168,8 +210,8 @@ class SmartSuggestionsService {
           const currentNames = new Set((currentItems as any[]).map((i: any) => normalize(i.name)))
           console.log('🔍 Nombres normalizados en lista:', Array.from(currentNames))
           
-          const beforeFilter = suggestions.length
-          finalSuggestions = suggestions.filter(s => 
+          const beforeFilter = suggestionsAfterHiding.length
+          finalSuggestions = suggestionsAfterHiding.filter(s => 
             !currentNames.has(normalize(s.product_name))
           )
           console.log(`🎯 Filtrado: ${beforeFilter} → ${finalSuggestions.length} sugerencias`)

@@ -4,10 +4,11 @@ import { useAuthStore } from '../stores/authStore'
 import shoppingListService, { type ShoppingListItem } from '../services/shoppingListService'
 import productService, { type ProductWithCategory } from '../services/productService'
 import smartSuggestionsService, { type ProductSuggestion } from '../services/smartSuggestionsService'
+import suggestionPreferencesService from '../services/suggestionPreferencesService'
 import { useDialog } from '../hooks/useDialog'
 import CustomSelect from '../components/CustomSelect'
 import NumericKeyboardModal from '../components/NumericKeyboardModal'
-import { Plus, Trash2, Edit2, ChevronDown, ChevronRight, Sparkles } from 'lucide-react'
+import { Plus, Trash2, Edit2, ChevronDown, ChevronRight, Sparkles, X } from 'lucide-react'
 
 export default function ShoppingListDetailPage() {
   const { id } = useParams()
@@ -36,6 +37,8 @@ export default function ShoppingListDetailPage() {
   const [showQuantityKeyboard, setShowQuantityKeyboard] = useState(false)
   const scrollPositionRef = useRef<number>(0)
   const [listName, setListName] = useState('')
+  const [selectedSuggestion, setSelectedSuggestion] = useState<ProductSuggestion | null>(null)
+  const [showSuggestionDetail, setShowSuggestionDetail] = useState(false)
 
   const load = async (preserveScroll = false) => {
     if (!user?.id || !id) return
@@ -75,9 +78,7 @@ export default function ShoppingListDetailPage() {
     if (!user?.id || !id) return
     setLoadingSmartSuggestions(true)
     try {
-      console.log('🔄 Recargando sugerencias inteligentes...')
       const suggestions = await smartSuggestionsService.getTopSuggestions(user.id, id, 15)
-      console.log('✅ Sugerencias cargadas:', suggestions.length)
       setSmartSuggestions(suggestions)
     } catch (e) {
       console.error('Error loading smart suggestions:', e)
@@ -462,8 +463,7 @@ export default function ShoppingListDetailPage() {
                   {smartSuggestions.map((suggestion) => (
                     <div
                       key={suggestion.product_id}
-                      className="flex items-center justify-between rounded-xl p-2 border cursor-pointer transition bg-gradient-to-r from-primary-50 to-purple-50 border-primary-200 hover:from-primary-100 hover:to-purple-100"
-                      onClick={() => addSmartSuggestion(suggestion)}
+                      className="flex items-center justify-between rounded-xl p-2 border transition bg-gradient-to-r from-primary-50 to-purple-50 border-primary-200 hover:from-primary-100 hover:to-purple-100"
                     >
                       <div className="flex items-center gap-3 flex-1 min-w-0">
                         <div className="flex-1 min-w-0">
@@ -482,9 +482,17 @@ export default function ShoppingListDetailPage() {
                           </div>
                         </div>
                       </div>
-                      <div className="flex-shrink-0">
+                      <div className="flex items-center gap-1 flex-shrink-0">
                         <button 
-                          className="p-2 text-primary-700 hover:bg-primary-100 rounded-lg transition"
+                          onClick={(e) => { e.stopPropagation(); setSelectedSuggestion(suggestion); setShowSuggestionDetail(true) }}
+                          className="p-2 text-secondary-700 hover:bg-secondary-200 rounded-lg transition"
+                          title="Ver detalles"
+                        >
+                          <Edit2 className="w-4 h-4" />
+                        </button>
+                        <button 
+                          onClick={(e) => { e.stopPropagation(); addSmartSuggestion(suggestion) }}
+                          className="p-2 text-primary-700 hover:bg-primary-200 rounded-lg transition"
                           title="Añadir a la lista"
                         >
                           <Plus className="w-4 h-4" />
@@ -540,6 +548,162 @@ export default function ShoppingListDetailPage() {
               </div>
             </div>
           )}
+        </div>
+      )}
+
+      {/* Suggestion Detail Modal */}
+      {showSuggestionDetail && selectedSuggestion && (
+        <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-[100] p-4">
+          <div className="bg-white rounded-2xl max-w-md w-full shadow-2xl">
+            <div className="p-6">
+              <div className="flex items-start justify-between mb-4">
+                <div className="flex-1">
+                  <h3 className="text-xl font-bold text-secondary-900">{selectedSuggestion.product_name}</h3>
+                  {selectedSuggestion.category_name && (
+                    <p className="text-sm text-secondary-600 mt-1">
+                      {selectedSuggestion.category_icon} {selectedSuggestion.category_name}
+                    </p>
+                  )}
+                </div>
+                <button
+                  onClick={() => setShowSuggestionDetail(false)}
+                  className="p-2 hover:bg-secondary-100 rounded-lg transition"
+                >
+                  <X className="w-5 h-5 text-secondary-600" />
+                </button>
+              </div>
+
+              <div className="bg-gradient-to-r from-primary-50 to-purple-50 rounded-lg p-4 mb-4">
+                <h4 className="font-semibold text-secondary-900 mb-3 flex items-center gap-2">
+                  <Sparkles className="w-4 h-4 text-primary-600" />
+                  ¿Por qué se sugiere este producto?
+                </h4>
+                <div className="space-y-2 text-sm text-secondary-700">
+                  <p>📊 Has comprado este producto <strong>{selectedSuggestion.purchase_count} veces</strong></p>
+                  <p>📅 Lo compras cada <strong>{selectedSuggestion.average_days_between_purchases} días</strong> en promedio</p>
+                  <p>🕐 Última compra hace <strong>{selectedSuggestion.days_since_last_purchase} días</strong></p>
+                  <p>📆 Fecha de última compra: <strong>{new Date(selectedSuggestion.last_purchase_date).toLocaleDateString('es-ES', { day: 'numeric', month: 'long', year: 'numeric' })}</strong></p>
+                  <p>🎯 Urgencia: <strong>{selectedSuggestion.urgency_score.toFixed(1)}x</strong> 
+                    {selectedSuggestion.urgency_score >= 1.5 ? ' (¡Muy urgente!)' : selectedSuggestion.urgency_score >= 1.2 ? ' (Urgente)' : selectedSuggestion.urgency_score >= 1.0 ? ' (En su momento)' : ' (Pronto)'}
+                  </p>
+                </div>
+              </div>
+
+              <div className="space-y-3">
+                <button
+                  onClick={async () => {
+                    await addSmartSuggestion(selectedSuggestion)
+                    setShowSuggestionDetail(false)
+                  }}
+                  className="w-full px-4 py-3 bg-primary-600 text-white rounded-lg hover:bg-primary-700 transition font-medium flex items-center justify-center gap-2"
+                >
+                  <Plus className="w-5 h-5" />
+                  Añadir a mi lista
+                </button>
+
+                <div className="border-t pt-3">
+                  <p className="text-sm font-medium text-secondary-700 mb-2">Ocultar sugerencia durante:</p>
+                  <div className="grid grid-cols-2 gap-2">
+                    <button
+                      onClick={async () => {
+                        if (!user?.id || !selectedSuggestion) return
+                        try {
+                          await suggestionPreferencesService.hideTemporary(selectedSuggestion.product_id, 15, user.id)
+                          setShowSuggestionDetail(false)
+                          await loadSmartSuggestions()
+                          await alert({ title: 'Éxito', message: 'Sugerencia oculta por 15 días', type: 'success' })
+                        } catch (e) {
+                          console.error(e)
+                          await alert({ title: 'Error', message: 'No se pudo ocultar la sugerencia', type: 'error' })
+                        }
+                      }}
+                      className="px-3 py-2 bg-secondary-100 text-secondary-700 rounded-lg hover:bg-secondary-200 transition text-sm"
+                    >
+                      15 días
+                    </button>
+                    <button
+                      onClick={async () => {
+                        if (!user?.id || !selectedSuggestion) return
+                        try {
+                          await suggestionPreferencesService.hideTemporary(selectedSuggestion.product_id, 30, user.id)
+                          setShowSuggestionDetail(false)
+                          await loadSmartSuggestions()
+                          await alert({ title: 'Éxito', message: 'Sugerencia oculta por 1 mes', type: 'success' })
+                        } catch (e) {
+                          console.error(e)
+                          await alert({ title: 'Error', message: 'No se pudo ocultar la sugerencia', type: 'error' })
+                        }
+                      }}
+                      className="px-3 py-2 bg-secondary-100 text-secondary-700 rounded-lg hover:bg-secondary-200 transition text-sm"
+                    >
+                      1 mes
+                    </button>
+                    <button
+                      onClick={async () => {
+                        if (!user?.id || !selectedSuggestion) return
+                        try {
+                          await suggestionPreferencesService.hideTemporary(selectedSuggestion.product_id, 90, user.id)
+                          setShowSuggestionDetail(false)
+                          await loadSmartSuggestions()
+                          await alert({ title: 'Éxito', message: 'Sugerencia oculta por 3 meses', type: 'success' })
+                        } catch (e) {
+                          console.error(e)
+                          await alert({ title: 'Error', message: 'No se pudo ocultar la sugerencia', type: 'error' })
+                        }
+                      }}
+                      className="px-3 py-2 bg-secondary-100 text-secondary-700 rounded-lg hover:bg-secondary-200 transition text-sm"
+                    >
+                      3 meses
+                    </button>
+                    <button
+                      onClick={async () => {
+                        if (!user?.id || !selectedSuggestion) return
+                        try {
+                          await suggestionPreferencesService.hideTemporary(selectedSuggestion.product_id, 365, user.id)
+                          setShowSuggestionDetail(false)
+                          await loadSmartSuggestions()
+                          await alert({ title: 'Éxito', message: 'Sugerencia oculta por 1 año', type: 'success' })
+                        } catch (e) {
+                          console.error(e)
+                          await alert({ title: 'Error', message: 'No se pudo ocultar la sugerencia', type: 'error' })
+                        }
+                      }}
+                      className="px-3 py-2 bg-secondary-100 text-secondary-700 rounded-lg hover:bg-secondary-200 transition text-sm"
+                    >
+                      1 año
+                    </button>
+                  </div>
+                </div>
+
+                <button
+                  onClick={async () => {
+                    const ok = await confirm({ 
+                      title: 'Eliminar sugerencia', 
+                      message: `¿Dejar de sugerir "${selectedSuggestion.product_name}" permanentemente?`, 
+                      type: 'warning', 
+                      confirmText: 'Eliminar', 
+                      cancelText: 'Cancelar' 
+                    })
+                    if (ok && user?.id && selectedSuggestion) {
+                      try {
+                        await suggestionPreferencesService.hidePermanent(selectedSuggestion.product_id, user.id)
+                        setShowSuggestionDetail(false)
+                        await loadSmartSuggestions()
+                        await alert({ title: 'Éxito', message: 'Sugerencia eliminada permanentemente', type: 'success' })
+                      } catch (e) {
+                        console.error(e)
+                        await alert({ title: 'Error', message: 'No se pudo eliminar la sugerencia', type: 'error' })
+                      }
+                    }
+                  }}
+                  className="w-full px-4 py-2 bg-red-50 text-red-700 rounded-lg hover:bg-red-100 transition font-medium"
+                >
+                  <Trash2 className="w-4 h-4 inline mr-2" />
+                  Eliminar sugerencia permanentemente
+                </button>
+              </div>
+            </div>
+          </div>
         </div>
       )}
 

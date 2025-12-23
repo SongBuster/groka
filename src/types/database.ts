@@ -362,6 +362,35 @@ export interface Database {
           updated_at?: string
         }
       }
+      suggestion_preferences: {
+        Row: {
+          id: string
+          user_id: string
+          product_id: string
+          action: 'hide_temporary' | 'hide_permanent'
+          hide_until: string | null
+          created_at: string
+          updated_at: string
+        }
+        Insert: {
+          id?: string
+          user_id: string
+          product_id: string
+          action: 'hide_temporary' | 'hide_permanent'
+          hide_until?: string | null
+          created_at?: string
+          updated_at?: string
+        }
+        Update: {
+          id?: string
+          user_id?: string
+          product_id?: string
+          action?: 'hide_temporary' | 'hide_permanent'
+          hide_until?: string | null
+          created_at?: string
+          updated_at?: string
+        }
+      }
     }
     Views: {
       [_ in never]: never
