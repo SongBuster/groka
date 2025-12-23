@@ -58,6 +58,17 @@ class ShoppingListService {
     return data as ShoppingList
   }
 
+  async getList(listId: string, userId: string): Promise<ShoppingList | null> {
+    const { data, error } = await supabase
+      .from('shopping_lists')
+      .select('*')
+      .eq('id', listId)
+      .eq('user_id', userId)
+      .single()
+    if (error) throw error
+    return data as ShoppingList
+  }
+
   async deleteList(listId: string, userId: string): Promise<void> {
     const { error } = await supabase
       .from('shopping_lists')

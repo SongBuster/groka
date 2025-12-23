@@ -35,6 +35,7 @@ export default function ShoppingListDetailPage() {
   const [loadingSmartSuggestions, setLoadingSmartSuggestions] = useState(false)
   const [showQuantityKeyboard, setShowQuantityKeyboard] = useState(false)
   const scrollPositionRef = useRef<number>(0)
+  const [listName, setListName] = useState('')
 
   const load = async (preserveScroll = false) => {
     if (!user?.id || !id) return
@@ -46,14 +47,16 @@ export default function ShoppingListDetailPage() {
     
     setLoading(true)
     try {
-      const [data, cats, purchased] = await Promise.all([
+      const [data, cats, purchased, list] = await Promise.all([
         shoppingListService.getItems(id, user.id),
         shoppingListService.getCategories(user.id),
-        shoppingListService.getRecentlyPurchasedItems(id, user.id)
+        shoppingListService.getRecentlyPurchasedItems(id, user.id),
+        shoppingListService.getList(id, user.id)
       ])
       setItems(data)
       setCategories(cats)
       setRecentlyPurchased(purchased)
+      if (list) setListName(list.name)
       
       // Restaurar posición de scroll si se guardó
       if (preserveScroll) {
@@ -368,7 +371,7 @@ export default function ShoppingListDetailPage() {
     <div className="max-w-3xl mx-auto px-4 sm:px-6 lg:px-8 py-6 sm:py-8">
       <div className="flex items-center justify-between mb-6">
         <Link to="/shopping-lists" className="text-secondary-700 hover:bg-secondary-100 px-3 py-2 rounded-lg">← Listas</Link>
-        <h1 className="text-2xl font-bold text-secondary-900">Lista</h1>
+        <h1 className="text-2xl font-bold text-secondary-900">{listName || 'Lista'}</h1>
         <div></div>
       </div>
 
@@ -709,6 +712,9 @@ export default function ShoppingListDetailPage() {
 
       {/* Spacer for mobile add bar + nav */}
       <div className="md:hidden h-40"></div>
+
+      {/* Spacer for desktop add bar */}
+      <div className="hidden md:block h-24"></div>
 
       {/* Numeric Keyboard Modal */}
       <NumericKeyboardModal
