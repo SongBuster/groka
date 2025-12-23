@@ -195,8 +195,6 @@ class SmartSuggestionsService {
           .eq('list_id', shoppingListId)
           .eq('purchased', false)
 
-        console.log('📋 Productos actuales en la lista:', currentItems?.length || 0)
-
         if (currentItems && currentItems.length > 0) {
           // Normalizar nombres para comparación más robusta
           const normalize = (s: string) => s
@@ -208,13 +206,11 @@ class SmartSuggestionsService {
             .trim()
           
           const currentNames = new Set((currentItems as any[]).map((i: any) => normalize(i.name)))
-          console.log('🔍 Nombres normalizados en lista:', Array.from(currentNames))
           
           const beforeFilter = suggestionsAfterHiding.length
           finalSuggestions = suggestionsAfterHiding.filter(s => 
             !currentNames.has(normalize(s.product_name))
           )
-          console.log(`🎯 Filtrado: ${beforeFilter} → ${finalSuggestions.length} sugerencias`)
         }
       }
 

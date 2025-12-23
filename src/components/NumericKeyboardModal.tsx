@@ -73,7 +73,7 @@ export default function NumericKeyboardModal({
   }
 
   return (
-    <div className="fixed inset-0 backdrop-blur-sm bg-black/30 flex items-end z-50">
+    <div className="fixed inset-0 backdrop-blur-sm bg-black/30 flex items-end z-[200]">
       <div className="bg-white w-full rounded-t-lg shadow-lg p-6">
         {/* Header */}
         <div className="flex items-center justify-between mb-6">

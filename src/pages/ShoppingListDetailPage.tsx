@@ -8,7 +8,7 @@ import suggestionPreferencesService from '../services/suggestionPreferencesServi
 import { useDialog } from '../hooks/useDialog'
 import CustomSelect from '../components/CustomSelect'
 import NumericKeyboardModal from '../components/NumericKeyboardModal'
-import { Plus, Trash2, Edit2, ChevronDown, ChevronRight, Sparkles, X } from 'lucide-react'
+import { Plus, Trash2, Edit2, ChevronDown, ChevronRight, Sparkles, X, Menu, CheckCheck, XCircle, Trash, Download } from 'lucide-react'
 
 export default function ShoppingListDetailPage() {
   const { id } = useParams()
@@ -39,6 +39,8 @@ export default function ShoppingListDetailPage() {
   const [listName, setListName] = useState('')
   const [selectedSuggestion, setSelectedSuggestion] = useState<ProductSuggestion | null>(null)
   const [showSuggestionDetail, setShowSuggestionDetail] = useState(false)
+  const [showListMenu, setShowListMenu] = useState(false)
+  const listMenuRef = useRef<HTMLDivElement>(null)
 
   const load = async (preserveScroll = false) => {
     if (!user?.id || !id) return
@@ -53,7 +55,7 @@ export default function ShoppingListDetailPage() {
       const [data, cats, purchased, list] = await Promise.all([
         shoppingListService.getItems(id, user.id),
         shoppingListService.getCategories(user.id),
-        shoppingListService.getRecentlyPurchasedItems(id, user.id),
+        shoppingListService.getRecentlyPurchasedItems(id, user.id, 20),
         shoppingListService.getList(id, user.id)
       ])
       setItems(data)
@@ -91,6 +93,17 @@ export default function ShoppingListDetailPage() {
     load()
     loadSmartSuggestions()
   }, [user?.id, id])
+
+  // Cerrar menú de lista al hacer clic fuera
+  useEffect(() => {
+    const handleClickOutside = (event: MouseEvent) => {
+      if (listMenuRef.current && !listMenuRef.current.contains(event.target as Node)) {
+        setShowListMenu(false)
+      }
+    }
+    document.addEventListener('mousedown', handleClickOutside)
+    return () => document.removeEventListener('mousedown', handleClickOutside)
+  }, [])
 
   // Search products when input changes
   useEffect(() => {
@@ -368,6 +381,127 @@ export default function ShoppingListDetailPage() {
     }
   }
 
+  // Funciones del menú de lista
+  const markAllAsPurchased = async () => {
+    if (!user?.id) return
+    const ok = await confirm({ 
+      title: 'Marcar todos como comprados', 
+      message: '¿Marcar todos los productos como comprados?', 
+      type: 'info',
+      confirmText: 'Sí, marcar todos',
+      cancelText: 'Cancelar'
+    })
+    if (!ok) return
+    
+    setShowListMenu(false)
+    try {
+      const unpurchasedItems = items.filter(item => !item.purchased)
+      for (const item of unpurchasedItems) {
+        await shoppingListService.updateItem(item.id, { purchased: true }, user.id)
+      }
+      await Promise.all([load(true), loadSmartSuggestions()])
+      await alert({ title: 'Éxito', message: `${unpurchasedItems.length} productos marcados como comprados`, type: 'success' })
+    } catch (e) {
+      console.error(e)
+      await alert({ title: 'Error', message: 'No se pudieron marcar los productos', type: 'error' })
+    }
+  }
+
+  const markAllAsUnpurchased = async () => {
+    if (!user?.id) return
+    const ok = await confirm({ 
+      title: 'Marcar todos como no comprados', 
+      message: '¿Marcar todos los productos como no comprados?', 
+      type: 'info',
+      confirmText: 'Sí, marcar todos',
+      cancelText: 'Cancelar'
+    })
+    if (!ok) return
+    
+    setShowListMenu(false)
+    try {
+      const purchasedItems = items.filter(item => item.purchased)
+      for (const item of purchasedItems) {
+        await shoppingListService.updateItem(item.id, { purchased: false, quantity: 1 }, user.id)
+      }
+      await Promise.all([load(true), loadSmartSuggestions()])
+      await alert({ title: 'Éxito', message: `${purchasedItems.length} productos marcados como no comprados`, type: 'success' })
+    } catch (e) {
+      console.error(e)
+      await alert({ title: 'Error', message: 'No se pudieron marcar los productos', type: 'error' })
+    }
+  }
+
+  const deleteAllItems = async () => {
+    if (!user?.id) return
+    const ok = await confirm({ 
+      title: 'Eliminar todos los productos', 
+      message: '¿Estás seguro? Esta acción no se puede deshacer.', 
+      type: 'warning',
+      confirmText: 'Sí, eliminar todos',
+      cancelText: 'Cancelar'
+    })
+    if (!ok) return
+    
+    setShowListMenu(false)
+    try {
+      for (const item of items) {
+        await shoppingListService.deleteItem(item.id, user.id)
+      }
+      await Promise.all([load(), loadSmartSuggestions()])
+      await alert({ title: 'Éxito', message: 'Todos los productos eliminados', type: 'success' })
+    } catch (e) {
+      console.error(e)
+      await alert({ title: 'Error', message: 'No se pudieron eliminar los productos', type: 'error' })
+    }
+  }
+
+  const clearPurchasedItems = async () => {
+    if (!user?.id) return
+    const purchasedItems = items.filter(item => item.purchased)
+    if (purchasedItems.length === 0) {
+      await alert({ title: 'Sin productos', message: 'No hay productos comprados para eliminar', type: 'info' })
+      return
+    }
+    
+    const ok = await confirm({ 
+      title: 'Limpiar productos comprados', 
+      message: `¿Eliminar ${purchasedItems.length} productos comprados?`, 
+      type: 'info',
+      confirmText: 'Sí, limpiar',
+      cancelText: 'Cancelar'
+    })
+    if (!ok) return
+    
+    setShowListMenu(false)
+    try {
+      for (const item of purchasedItems) {
+        await shoppingListService.deleteItem(item.id, user.id)
+      }
+      await load(true)
+      await alert({ title: 'Éxito', message: `${purchasedItems.length} productos eliminados`, type: 'success' })
+    } catch (e) {
+      console.error(e)
+      await alert({ title: 'Error', message: 'No se pudieron eliminar los productos', type: 'error' })
+    }
+  }
+
+  const exportList = () => {
+    setShowListMenu(false)
+    const text = items
+      .filter(item => !item.purchased)
+      .map(item => `${item.name} (${item.quantity})${item.notes ? ` - ${item.notes}` : ''}`)
+      .join('\n')
+    
+    const blob = new Blob([text], { type: 'text/plain' })
+    const url = URL.createObjectURL(blob)
+    const a = document.createElement('a')
+    a.href = url
+    a.download = `${listName || 'lista'}.txt`
+    a.click()
+    URL.revokeObjectURL(url)
+  }
+
   return (
     <div className="max-w-3xl mx-auto px-4 sm:px-6 lg:px-8 py-6 sm:py-8">
       <div className="flex items-center justify-between mb-6">
@@ -380,6 +514,68 @@ export default function ShoppingListDetailPage() {
         <div className="text-secondary-600">Cargando…</div>
       ) : (
         <div className="space-y-6">
+          {/* Menu de acciones de lista */}
+          {items.length > 0 && (
+            <div className="relative" ref={listMenuRef}>
+              <button
+                onClick={() => setShowListMenu(!showListMenu)}
+                className="flex items-center gap-2 px-4 py-2 bg-secondary-100 hover:bg-secondary-200 text-secondary-700 rounded-lg transition"
+                title="Opciones de lista"
+              >
+                <Menu className="w-5 h-5" />
+                <span className="text-sm font-medium">Opciones</span>
+              </button>
+
+              {showListMenu && (
+                <div className="absolute top-full left-0 mt-2 w-64 bg-white rounded-lg shadow-lg border border-secondary-200 py-2 z-50">
+                  <button
+                    onClick={markAllAsPurchased}
+                    className="w-full px-4 py-2 text-left hover:bg-secondary-50 flex items-center gap-3 transition"
+                  >
+                    <CheckCheck className="w-5 h-5 text-green-600" />
+                    <span className="text-sm text-secondary-900">Marcar todos como comprados</span>
+                  </button>
+                  
+                  <button
+                    onClick={markAllAsUnpurchased}
+                    className="w-full px-4 py-2 text-left hover:bg-secondary-50 flex items-center gap-3 transition"
+                  >
+                    <XCircle className="w-5 h-5 text-orange-600" />
+                    <span className="text-sm text-secondary-900">Marcar todos como no comprados</span>
+                  </button>
+                  
+                  <div className="border-t border-secondary-200 my-2"></div>
+                  
+                  <button
+                    onClick={clearPurchasedItems}
+                    className="w-full px-4 py-2 text-left hover:bg-secondary-50 flex items-center gap-3 transition"
+                  >
+                    <Trash className="w-5 h-5 text-blue-600" />
+                    <span className="text-sm text-secondary-900">Limpiar productos comprados</span>
+                  </button>
+                  
+                  <button
+                    onClick={exportList}
+                    className="w-full px-4 py-2 text-left hover:bg-secondary-50 flex items-center gap-3 transition"
+                  >
+                    <Download className="w-5 h-5 text-purple-600" />
+                    <span className="text-sm text-secondary-900">Exportar lista a archivo</span>
+                  </button>
+                  
+                  <div className="border-t border-secondary-200 my-2"></div>
+                  
+                  <button
+                    onClick={deleteAllItems}
+                    className="w-full px-4 py-2 text-left hover:bg-red-50 flex items-center gap-3 transition"
+                  >
+                    <Trash2 className="w-5 h-5 text-red-600" />
+                    <span className="text-sm text-red-600 font-medium">Eliminar todos los productos</span>
+                  </button>
+                </div>
+              )}
+            </div>
+          )}
+
           {/* Items by category (only unpurchased) */}
           {Object.entries(grouped).map(([key, g]) => {
             const unpurchasedItems = g.items.filter((it) => !it.purchased)
@@ -463,7 +659,8 @@ export default function ShoppingListDetailPage() {
                   {smartSuggestions.map((suggestion) => (
                     <div
                       key={suggestion.product_id}
-                      className="flex items-center justify-between rounded-xl p-2 border transition bg-gradient-to-r from-primary-50 to-purple-50 border-primary-200 hover:from-primary-100 hover:to-purple-100"
+                      onClick={() => addSmartSuggestion(suggestion)}
+                      className="flex items-center justify-between rounded-xl p-2 border transition bg-gradient-to-r from-primary-50 to-purple-50 border-primary-200 hover:from-primary-100 hover:to-purple-100 cursor-pointer"
                     >
                       <div className="flex items-center gap-3 flex-1 min-w-0">
                         <div className="flex-1 min-w-0">
@@ -490,13 +687,6 @@ export default function ShoppingListDetailPage() {
                         >
                           <Edit2 className="w-4 h-4" />
                         </button>
-                        <button 
-                          onClick={(e) => { e.stopPropagation(); addSmartSuggestion(suggestion) }}
-                          className="p-2 text-primary-700 hover:bg-primary-200 rounded-lg transition"
-                          title="Añadir a la lista"
-                        >
-                          <Plus className="w-4 h-4" />
-                        </button>
                       </div>
                     </div>
                   ))}
@@ -514,7 +704,7 @@ export default function ShoppingListDetailPage() {
           {/* Recently purchased section below all categories */}
           {recentlyPurchased.length > 0 && (
             <div>
-              <h2 className="text-lg font-semibold text-secondary-900 mb-3">Utilizados recientemente</h2>
+              <h2 className="text-lg font-semibold text-secondary-900 mb-3">Comprados recientemente</h2>
               <div className="space-y-3">
                 {recentlyPurchased.slice(0, 20).map((item) => (
                   <div
@@ -717,13 +907,12 @@ export default function ShoppingListDetailPage() {
               {/* Quantity */}
               <div className="mb-4">
                 <label className="block text-sm font-medium text-secondary-900 mb-2">Cantidad</label>
-                <input
-                  type="number"
-                  min="1"
-                  value={editQuantity}
-                  onChange={(e) => setEditQuantity(parseInt(e.target.value) || 1)}
-                  className="w-full px-4 py-2 border border-secondary-300 rounded-lg text-secondary-900 focus:outline-none focus:ring-2 focus:ring-primary-500"
-                />
+                <button
+                  onClick={() => setShowQuantityKeyboard(true)}
+                  className="w-full px-4 py-2 border border-primary-300 bg-primary-50 rounded-lg text-primary-700 font-semibold hover:bg-primary-100 transition text-left"
+                >
+                  {editQuantity}
+                </button>
               </div>
 
               {/* Category */}
@@ -883,9 +1072,15 @@ export default function ShoppingListDetailPage() {
       {/* Numeric Keyboard Modal */}
       <NumericKeyboardModal
         isOpen={showQuantityKeyboard}
-        value={quantity}
+        value={editingItem ? editQuantity : quantity}
         onClose={() => setShowQuantityKeyboard(false)}
-        onConfirm={(value) => setQuantity(value)}
+        onConfirm={(value) => {
+          if (editingItem) {
+            setEditQuantity(value)
+          } else {
+            setQuantity(value)
+          }
+        }}
         title="Cantidad"
         minValue={1}
         maxValue={999}
