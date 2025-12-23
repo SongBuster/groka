@@ -269,32 +269,12 @@ export default function ShoppingListDetailPage() {
     }
   }
 
-  const togglePurchased = async (item: ShoppingListItem) => {
-    if (!user?.id) return
-    try {
-      await shoppingListService.updateItem(item.id, { purchased: !item.purchased }, user.id)
-      await load()
-    } catch (e) {
-      console.error(e)
-    }
-  }
-
   const markPurchased = async (item: ShoppingListItem) => {
     if (!user?.id) return
     try {
       if (item.purchased) return
       await shoppingListService.updateItem(item.id, { purchased: true }, user.id)
       await Promise.all([load(true), loadSmartSuggestions()])
-    } catch (e) {
-      console.error(e)
-    }
-  }
-
-  const setCategory = async (item: ShoppingListItem, categoryId: string | null) => {
-    if (!user?.id) return
-    try {
-      await shoppingListService.updateItem(item.id, { category_id: categoryId || null }, user.id)
-      await load()
     } catch (e) {
       console.error(e)
     }

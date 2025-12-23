@@ -40,7 +40,7 @@ export default function ShoppingListsPage() {
       confirmText: 'Crear',
       cancelText: 'Cancelar'
     })
-    if (!name?.trim()) return
+    if (!name?.trim() || !user?.id) return
     try {
       await shoppingListService.createList(name.trim(), user.id)
       await load()
