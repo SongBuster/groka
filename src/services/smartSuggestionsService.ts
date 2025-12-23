@@ -207,7 +207,6 @@ class SmartSuggestionsService {
           
           const currentNames = new Set((currentItems as any[]).map((i: any) => normalize(i.name)))
           
-          const beforeFilter = suggestionsAfterHiding.length
           finalSuggestions = suggestionsAfterHiding.filter(s => 
             !currentNames.has(normalize(s.product_name))
           )
