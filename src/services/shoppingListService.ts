@@ -8,6 +8,10 @@ export type ShoppingList = {
   name: string
   created_at: string
   updated_at: string
+  is_shared?: boolean
+  shared_by_email?: string
+  permission?: 'view' | 'edit'
+  is_owner?: boolean
 }
 
 export type ShoppingListItem = {
@@ -28,21 +32,68 @@ export type ShoppingListItem = {
 
 class ShoppingListService {
   async getLists(userId: string): Promise<ShoppingList[]> {
-    const { data, error } = await supabase
+    // Cargar listas propias
+    const { data: ownLists, error: ownError } = await supabase
       .from('shopping_lists')
       .select('*')
       .eq('user_id', userId)
       .order('updated_at', { ascending: false })
-    if (error) throw error
-    return (data as any[]) || []
+    
+    if (ownError) throw ownError
+    
+    // Cargar listas compartidas con el usuario
+    const { data: sharedData, error: sharedError } = await supabase
+      .from('shopping_list_shares')
+      .select(`
+        permission,
+        shared_by_user_id,
+        shopping_lists!inner (
+          id,
+          user_id,
+          name,
+          created_at,
+          updated_at
+        )
+      `)
+      .eq('shared_with_user_id', userId)
+    
+    if (sharedError) throw sharedError
+    
+    // Obtener emails de los dueños de listas compartidas
+    const sharedListsWithEmails = await Promise.all(
+      (sharedData || []).map(async (share: any) => {
+        const { data: emailData } = await (supabase.rpc as any)('get_user_by_email_from_id', 
+          { user_id: share.shared_by_user_id }
+        ) as { data: { email: string }[] | null }
+        
+        return {
+          ...share.shopping_lists,
+          is_shared: true,
+          shared_by_email: emailData?.[0]?.email || 'Usuario desconocido',
+          permission: share.permission,
+          is_owner: false
+        }
+      })
+    )
+    
+    // Marcar listas propias
+    const ownListsWithFlag = (ownLists || []).map(list => ({
+      ...list,
+      is_shared: false,
+      is_owner: true
+    }))
+    
+    // Combinar y ordenar por fecha de actualización
+    return [...ownListsWithFlag, ...sharedListsWithEmails]
+      .sort((a, b) => new Date(b.updated_at).getTime() - new Date(a.updated_at).getTime())
   }
 
   async getUnpurchasedItemCount(listId: string, userId: string): Promise<number> {
+    // No filtramos por user_id para contar items en listas compartidas
     const { count, error } = await supabase
       .from('shopping_list_items')
       .select('*', { count: 'exact' })
       .eq('list_id', listId)
-      .eq('user_id', userId)
       .eq('purchased', false)
     if (error) throw error
     return count || 0
@@ -59,14 +110,33 @@ class ShoppingListService {
   }
 
   async getList(listId: string, userId: string): Promise<ShoppingList | null> {
+    // No filtramos por user_id para permitir acceso a listas compartidas
+    // Las políticas RLS se encargan de la seguridad
     const { data, error } = await supabase
       .from('shopping_lists')
       .select('*')
       .eq('id', listId)
-      .eq('user_id', userId)
       .single()
-    if (error) throw error
-    return data as ShoppingList
+    
+    if (error) {
+      if (error.code === 'PGRST116') return null // No encontrada o sin acceso
+      throw error
+    }
+    
+    // Verificar si es compartida
+    const { data: shareData } = await supabase
+      .from('shopping_list_shares')
+      .select('permission, shared_by_user_id')
+      .eq('list_id', listId)
+      .eq('shared_with_user_id', userId)
+      .maybeSingle()
+    
+    return {
+      ...data,
+      is_shared: !!shareData,
+      permission: shareData?.permission,
+      is_owner: data.user_id === userId
+    } as ShoppingList
   }
 
   async deleteList(listId: string, userId: string): Promise<void> {
@@ -79,11 +149,11 @@ class ShoppingListService {
   }
 
   async getItems(listId: string, userId: string): Promise<ShoppingListItem[]> {
+    // No filtramos por user_id para permitir ver items de listas compartidas
     const { data, error } = await supabase
       .from('shopping_list_items')
       .select(`*, category:categories(id,name,icon,color)`)
       .eq('list_id', listId)
-      .eq('user_id', userId)
       .order('position')
       .order('created_at')
     if (error) throw error
@@ -111,30 +181,30 @@ class ShoppingListService {
   }
 
   async updateItem(itemId: string, updates: Partial<Pick<ShoppingListItem,'name'|'quantity'|'purchased'|'category_id'|'notes'>>, userId: string): Promise<void> {
+    // No filtramos por user_id - las políticas RLS controlan el acceso
     const { error } = await (supabase as any)
       .from('shopping_list_items')
       .update({ ...updates, updated_at: new Date().toISOString() } as any)
       .eq('id', itemId)
-      .eq('user_id', userId)
     if (error) throw error
   }
 
   async deleteItem(itemId: string, userId: string): Promise<void> {
+    // No filtramos por user_id - las políticas RLS controlan el acceso
     const { error } = await supabase
       .from('shopping_list_items')
       .delete()
       .eq('id', itemId)
-      .eq('user_id', userId)
     if (error) throw error
   }
 
   async reorderItems(listId: string, orderedIds: string[], userId: string): Promise<void> {
+    // No filtramos por user_id - las políticas RLS controlan el acceso
     const updates = orderedIds.map((id, idx) => ({ id, position: idx }))
     const { error } = await (supabase as any)
       .from('shopping_list_items')
       .upsert(updates as any, { onConflict: 'id' })
       .eq('list_id', listId)
-      .eq('user_id', userId)
     if (error) throw error
   }
 
@@ -164,11 +234,11 @@ class ShoppingListService {
   }
 
   async getRecentlyPurchasedItems(listId: string, userId: string, limit: number = 10): Promise<ShoppingListItem[]> {
+    // No filtramos por user_id - las políticas RLS controlan el acceso
     const { data, error } = await supabase
       .from('shopping_list_items')
       .select('*, category:categories(id,name,icon,color)')
       .eq('list_id', listId)
-      .eq('user_id', userId)
       .eq('purchased', true)
       .order('updated_at', { ascending: false })
       .limit(limit)

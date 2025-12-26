@@ -339,6 +339,35 @@ export interface Database {
           created_at?: string
         }
       }
+      shopping_list_shares: {
+        Row: {
+          id: string
+          list_id: string
+          shared_with_user_id: string
+          shared_by_user_id: string
+          permission: 'view' | 'edit'
+          created_at: string
+          updated_at: string
+        }
+        Insert: {
+          id?: string
+          list_id: string
+          shared_with_user_id: string
+          shared_by_user_id: string
+          permission?: 'view' | 'edit'
+          created_at?: string
+          updated_at?: string
+        }
+        Update: {
+          id?: string
+          list_id?: string
+          shared_with_user_id?: string
+          shared_by_user_id?: string
+          permission?: 'view' | 'edit'
+          created_at?: string
+          updated_at?: string
+        }
+      }
       profiles: {
         Row: {
           id: string
