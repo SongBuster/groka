@@ -26,7 +26,7 @@ export default function ShoppingListsPage() {
       // Load unpurchased count for each list
       const listsWithCounts = await Promise.all(
         data.map(async (list) => {
-          const count = await shoppingListService.getUnpurchasedItemCount(list.id, user.id)
+          const count = await shoppingListService.getUnpurchasedItemCount(list.id)
           return { ...list, unpurchasedCount: count }
         })
       )

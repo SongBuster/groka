@@ -53,9 +53,9 @@ export default function ShoppingListDetailPage() {
     setLoading(true)
     try {
       const [data, cats, purchased, list] = await Promise.all([
-        shoppingListService.getItems(id, user.id),
+        shoppingListService.getItems(id),
         shoppingListService.getCategories(user.id),
-        shoppingListService.getRecentlyPurchasedItems(id, user.id, 20),
+        shoppingListService.getRecentlyPurchasedItems(id, 20),
         shoppingListService.getList(id, user.id)
       ])
       setItems(data)
@@ -199,8 +199,7 @@ export default function ShoppingListDetailPage() {
         // Si ya existe como comprado, marcarlo como no comprado
         await shoppingListService.updateItem(
           existingItem.id,
-          { purchased: false, quantity: quantity || 1 },
-          user.id
+          { purchased: false, quantity: quantity || 1 }
         )
       } else if (!existingItem) {
         // Si no existe, crear uno nuevo
@@ -290,7 +289,7 @@ export default function ShoppingListDetailPage() {
     if (!user?.id) return
     try {
       if (item.purchased) return
-      await shoppingListService.updateItem(item.id, { purchased: true }, user.id)
+      await shoppingListService.updateItem(item.id, { purchased: true })
       await Promise.all([load(true), loadSmartSuggestions()])
     } catch (e) {
       console.error(e)
@@ -301,7 +300,7 @@ export default function ShoppingListDetailPage() {
     const ok = await confirm({ title: 'Eliminar', message: `¿Eliminar "${item.name}"?`, type: 'warning', confirmText: 'Eliminar', cancelText: 'Cancelar' })
     if (!ok || !user?.id) return
     try {
-      await shoppingListService.deleteItem(item.id, user.id)
+      await shoppingListService.deleteItem(item.id)
       await Promise.all([load(true), loadSmartSuggestions()])
     } catch (e) {
       console.error(e)
@@ -333,7 +332,7 @@ export default function ShoppingListDetailPage() {
 
     try {
       const orderedIds = newItems.map(i => i.id)
-      await shoppingListService.reorderItems(id, orderedIds, user.id)
+      await shoppingListService.reorderItems(id, orderedIds)
       await load()
     } catch (e) {
       console.error(e)
@@ -356,8 +355,7 @@ export default function ShoppingListDetailPage() {
           quantity: editQuantity,
           category_id: editCategory || null,
           notes: editNotes || null
-        },
-        user.id
+        }
       )
       setEditingItem(null)
       await load()
@@ -372,8 +370,7 @@ export default function ShoppingListDetailPage() {
       if (!item.purchased) return
       await shoppingListService.updateItem(
         item.id,
-        { purchased: false, quantity: 1, notes: null },
-        user.id
+        { purchased: false, quantity: 1, notes: null }
       )
       await Promise.all([load(), loadSmartSuggestions()])
     } catch (e) {
@@ -397,7 +394,7 @@ export default function ShoppingListDetailPage() {
     try {
       const unpurchasedItems = items.filter(item => !item.purchased)
       for (const item of unpurchasedItems) {
-        await shoppingListService.updateItem(item.id, { purchased: true }, user.id)
+        await shoppingListService.updateItem(item.id, { purchased: true })
       }
       await Promise.all([load(true), loadSmartSuggestions()])
       await alert({ title: 'Éxito', message: `${unpurchasedItems.length} productos marcados como comprados`, type: 'success' })
@@ -422,7 +419,7 @@ export default function ShoppingListDetailPage() {
     try {
       const purchasedItems = items.filter(item => item.purchased)
       for (const item of purchasedItems) {
-        await shoppingListService.updateItem(item.id, { purchased: false, quantity: 1 }, user.id)
+        await shoppingListService.updateItem(item.id, { purchased: false, quantity: 1 })
       }
       await Promise.all([load(true), loadSmartSuggestions()])
       await alert({ title: 'Éxito', message: `${purchasedItems.length} productos marcados como no comprados`, type: 'success' })
@@ -446,7 +443,7 @@ export default function ShoppingListDetailPage() {
     setShowListMenu(false)
     try {
       for (const item of items) {
-        await shoppingListService.deleteItem(item.id, user.id)
+        await shoppingListService.deleteItem(item.id)
       }
       await Promise.all([load(), loadSmartSuggestions()])
       await alert({ title: 'Éxito', message: 'Todos los productos eliminados', type: 'success' })
@@ -476,7 +473,7 @@ export default function ShoppingListDetailPage() {
     setShowListMenu(false)
     try {
       for (const item of purchasedItems) {
-        await shoppingListService.deleteItem(item.id, user.id)
+        await shoppingListService.deleteItem(item.id)
       }
       await load(true)
       await alert({ title: 'Éxito', message: `${purchasedItems.length} productos eliminados`, type: 'success' })

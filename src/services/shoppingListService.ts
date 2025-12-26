@@ -78,7 +78,7 @@ class ShoppingListService {
     
     // Marcar listas propias
     const ownListsWithFlag = (ownLists || []).map(list => ({
-      ...list,
+      ...(list as any),
       is_shared: false,
       is_owner: true
     }))
@@ -88,7 +88,7 @@ class ShoppingListService {
       .sort((a, b) => new Date(b.updated_at).getTime() - new Date(a.updated_at).getTime())
   }
 
-  async getUnpurchasedItemCount(listId: string, userId: string): Promise<number> {
+  async getUnpurchasedItemCount(listId: string): Promise<number> {
     // No filtramos por user_id para contar items en listas compartidas
     const { count, error } = await supabase
       .from('shopping_list_items')
@@ -132,10 +132,10 @@ class ShoppingListService {
       .maybeSingle()
     
     return {
-      ...data,
+      ...(data as any),
       is_shared: !!shareData,
-      permission: shareData?.permission,
-      is_owner: data.user_id === userId
+      permission: (shareData as any)?.permission,
+      is_owner: (data as any).user_id === userId
     } as ShoppingList
   }
 
@@ -148,7 +148,7 @@ class ShoppingListService {
     if (error) throw error
   }
 
-  async getItems(listId: string, userId: string): Promise<ShoppingListItem[]> {
+  async getItems(listId: string): Promise<ShoppingListItem[]> {
     // No filtramos por user_id para permitir ver items de listas compartidas
     const { data, error } = await supabase
       .from('shopping_list_items')
@@ -180,7 +180,7 @@ class ShoppingListService {
     return data as ShoppingListItem
   }
 
-  async updateItem(itemId: string, updates: Partial<Pick<ShoppingListItem,'name'|'quantity'|'purchased'|'category_id'|'notes'>>, userId: string): Promise<void> {
+  async updateItem(itemId: string, updates: Partial<Pick<ShoppingListItem,'name'|'quantity'|'purchased'|'category_id'|'notes'>>): Promise<void> {
     // No filtramos por user_id - las políticas RLS controlan el acceso
     const { error } = await (supabase as any)
       .from('shopping_list_items')
@@ -189,7 +189,7 @@ class ShoppingListService {
     if (error) throw error
   }
 
-  async deleteItem(itemId: string, userId: string): Promise<void> {
+  async deleteItem(itemId: string): Promise<void> {
     // No filtramos por user_id - las políticas RLS controlan el acceso
     const { error } = await supabase
       .from('shopping_list_items')
@@ -198,7 +198,7 @@ class ShoppingListService {
     if (error) throw error
   }
 
-  async reorderItems(listId: string, orderedIds: string[], userId: string): Promise<void> {
+  async reorderItems(listId: string, orderedIds: string[]): Promise<void> {
     // No filtramos por user_id - las políticas RLS controlan el acceso
     const updates = orderedIds.map((id, idx) => ({ id, position: idx }))
     const { error } = await (supabase as any)
@@ -233,7 +233,7 @@ class ShoppingListService {
     return unique
   }
 
-  async getRecentlyPurchasedItems(listId: string, userId: string, limit: number = 10): Promise<ShoppingListItem[]> {
+  async getRecentlyPurchasedItems(listId: string, limit: number = 10): Promise<ShoppingListItem[]> {
     // No filtramos por user_id - las políticas RLS controlan el acceso
     const { data, error } = await supabase
       .from('shopping_list_items')
