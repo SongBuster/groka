@@ -74,6 +74,26 @@ supabase stop
 
 ## 🔄 Workflow de Desarrollo
 
+### Exportar Datos de Producción
+
+Cuando quieras trabajar con datos reales de producción en tu entorno local:
+
+```bash
+# Exportar datos de producción
+node scripts/export-data.mjs
+
+# Aplicar los datos a local (incluye reset de BD)
+supabase db reset
+```
+
+El script `export-data.mjs` extrae los datos de las siguientes tablas:
+- categories
+- products
+- tickets y ticket_items
+- shopping_lists, shopping_list_items y shopping_list_shares
+
+Los datos se guardan en `supabase/seed.sql` y se aplican automáticamente con `supabase db reset`.
+
 ### Crear una Nueva Migración
 
 ```bash
