@@ -72,7 +72,7 @@ export default function CustomSelect({
       <button
         type="button"
         onClick={() => setIsOpen(!isOpen)}
-        className="w-full px-4 py-2 text-left bg-white border border-secondary-300 rounded-lg 
+        className="w-full px-4 py-2 text-left bg-white text-secondary-900 border border-secondary-300 rounded-lg 
                    hover:border-primary-500 focus:outline-none focus:ring-2 focus:ring-primary-500 
                    transition-colors flex items-center justify-between"
       >
@@ -86,7 +86,7 @@ export default function CustomSelect({
 
       {/* Dropdown */}
       {isOpen && (
-        <div className="absolute z-50 w-full mt-1 bg-white border border-secondary-300 rounded-lg 
+        <div className="absolute z-50 w-full mt-1 bg-white text-secondary-900 border border-secondary-300 rounded-lg 
                         shadow-lg max-h-60 overflow-y-auto">
           {options.map((option) => (
             <button

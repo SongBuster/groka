@@ -56,6 +56,7 @@ export default function AnalyticsPage() {
   const [loading, setLoading] = useState(true)
   const [selectedStore, setSelectedStore] = useState<string>('all')
   const [selectedPeriod, setSelectedPeriod] = useState<'all' | 'month' | 'quarter' | 'semester' | 'year'>('all')
+  const [periodMode, setPeriodMode] = useState<'current' | 'rolling'>('current')
 
   useEffect(() => {
     const load = async () => {
@@ -114,27 +115,24 @@ export default function AnalyticsPage() {
     return items.filter(i => i.tickets?.supermarket_id === selectedStore)
   }, [items, selectedStore])
 
+  const periodRange = useMemo(() => getPeriodRange(selectedPeriod, periodMode), [selectedPeriod, periodMode])
+
   const filteredTickets = useMemo(() => {
-    const startDate = getStartDate(selectedPeriod)
-    return storeFilteredTickets.filter(t => {
-      if (!startDate) return true
-      const dateStr = t.purchase_date || t.created_at
-      const d = new Date(dateStr)
-      if (Number.isNaN(d.getTime())) return false
-      return d >= startDate
-    })
-  }, [storeFilteredTickets, selectedPeriod])
+    if (selectedPeriod === 'all') return storeFilteredTickets
+    if (!periodRange) return storeFilteredTickets
+    return storeFilteredTickets.filter(t => isWithinRange(t, periodRange.start, periodRange.end))
+  }, [storeFilteredTickets, selectedPeriod, periodRange])
 
   const filteredItems = useMemo(() => {
-    const startDate = getStartDate(selectedPeriod)
+    if (selectedPeriod === 'all') return storeFilteredItems
+    if (!periodRange) return storeFilteredItems
     return storeFilteredItems.filter(i => {
-      if (!startDate) return true
       const dateStr = i.tickets?.purchase_date || i.created_at
       const d = new Date(dateStr)
       if (Number.isNaN(d.getTime())) return false
-      return d >= startDate
+      return d >= periodRange.start && d <= periodRange.end
     })
-  }, [storeFilteredItems, selectedPeriod])
+  }, [storeFilteredItems, selectedPeriod, periodRange])
 
   const totalSpend = useMemo(() => {
     return filteredTickets.reduce((sum, t) => sum + (t.total_amount || 0), 0)
@@ -144,9 +142,8 @@ export default function AnalyticsPage() {
   const avgTicket = ticketsCount > 0 ? totalSpend / ticketsCount : 0
 
   const comparison = useMemo(() => {
-    const range = getPeriodRangeToDate(selectedPeriod)
-    if (!range) return null
-    const { start, end, prevStart, prevEnd } = range
+    if (!periodRange) return null
+    const { start, end, prevStart, prevEnd } = periodRange
 
     const current = storeFilteredTickets
       .filter(t => isWithinRange(t, start, end))
@@ -159,7 +156,27 @@ export default function AnalyticsPage() {
     const diff = current - previous
     const pct = previous > 0 ? (diff / previous) * 100 : null
     return { current, previous, diff, pct }
-  }, [storeFilteredTickets, selectedPeriod])
+  }, [storeFilteredTickets, selectedPeriod, periodRange])
+
+  const infoRangeLabel = useMemo(() => {
+    if (selectedPeriod === 'all') {
+      if (tickets.length === 0) return 'Todo el histórico'
+      let minDate: Date | null = null
+      let maxDate: Date | null = null
+      for (const t of tickets) {
+        const dateStr = t.purchase_date || t.created_at
+        const d = new Date(dateStr)
+        if (Number.isNaN(d.getTime())) continue
+        if (!minDate || d < minDate) minDate = d
+        if (!maxDate || d > maxDate) maxDate = d
+      }
+      if (!minDate || !maxDate) return 'Todo el histórico'
+      return rangeLabel(minDate, maxDate)
+    }
+    if (!periodRange) return ''
+    const base = rangeLabel(periodRange.start, periodRange.end)
+    return periodMode === 'rolling' ? `${base} (móvil)` : base
+  }, [selectedPeriod, tickets, periodRange, periodMode])
 
 
   const monthlySpend = useMemo<MonthlySpend[]>(() => {
@@ -196,20 +213,19 @@ export default function AnalyticsPage() {
   }, [monthlySpend])
 
   const comparisonChart = useMemo<MonthlySpend[] | null>(() => {
-    const range = getPeriodRangeToDate(selectedPeriod)
-    if (!range) return null
+    if (!periodRange) return null
     const current = storeFilteredTickets
-      .filter(t => isWithinRange(t, range.start, range.end))
+      .filter(t => isWithinRange(t, periodRange.start, periodRange.end))
       .reduce((sum, t) => sum + (t.total_amount || 0), 0)
     const previous = storeFilteredTickets
-      .filter(t => isWithinRange(t, range.prevStart, range.prevEnd))
+      .filter(t => isWithinRange(t, periodRange.prevStart, periodRange.prevEnd))
       .reduce((sum, t) => sum + (t.total_amount || 0), 0)
 
     return [
-      { key: 'current', label: rangeLabel(range.start, range.end), value: current },
-      { key: 'previous', label: rangeLabel(range.prevStart, range.prevEnd), value: previous }
+      { key: 'current', label: rangeLabel(periodRange.start, periodRange.end), value: current },
+      { key: 'previous', label: rangeLabel(periodRange.prevStart, periodRange.prevEnd), value: previous }
     ]
-  }, [storeFilteredTickets, selectedPeriod])
+  }, [storeFilteredTickets, selectedPeriod, periodRange])
 
   const priceIncreases = useMemo(() => {
     const map = new Map<string, { name: string; first: number; last: number; firstDate: Date; lastDate: Date }>()
@@ -265,16 +281,19 @@ export default function AnalyticsPage() {
   }, [filteredItems])
 
   const spendForecast = useMemo(() => {
-    const range = getPeriodRangeToDate(selectedPeriod)
-    if (!range) return null
-    const { start, end } = range
+    if (!periodRange) return null
+    const { start, end } = periodRange
     const current = storeFilteredTickets
       .filter(t => isWithinRange(t, start, end))
       .reduce((sum, t) => sum + (t.total_amount || 0), 0)
     const daysElapsed = Math.max(1, Math.floor((end.getTime() - start.getTime()) / (1000 * 60 * 60 * 24)) + 1)
-    const totalDays = Math.max(daysElapsed, getTotalDaysForPeriod(start, selectedPeriod))
+    const totalDays = periodMode === 'rolling'
+      ? daysElapsed
+      : Math.max(daysElapsed, getTotalDaysForPeriod(start, selectedPeriod))
     const forecast = (current / daysElapsed) * totalDays
-    const prevRange = getPreviousFullPeriodRange(selectedPeriod)
+    const prevRange = periodMode === 'rolling'
+      ? { start: periodRange.prevStart, end: periodRange.prevEnd }
+      : getPreviousFullPeriodRange(selectedPeriod)
     const previous = prevRange
       ? storeFilteredTickets
         .filter(t => isWithinRange(t, prevRange.start, prevRange.end))
@@ -282,7 +301,7 @@ export default function AnalyticsPage() {
       : 0
     const diff = forecast - previous
     return { current, forecast, previous, diff }
-  }, [storeFilteredTickets, selectedPeriod])
+  }, [storeFilteredTickets, selectedPeriod, periodRange, periodMode])
 
   const topCategories = useMemo<TopItem[]>(() => {
     const map = new Map<string, TopItem>()
@@ -342,7 +361,7 @@ export default function AnalyticsPage() {
                 <select
                   value={selectedStore}
                   onChange={(e) => setSelectedStore(e.target.value)}
-                  className="px-3 py-2 border border-secondary-300 rounded-lg text-sm bg-white"
+                  className="px-3 py-2 border border-secondary-300 rounded-lg text-sm bg-white text-secondary-900"
                 >
                   <option value="all">Todos</option>
                   {storeOptions.map((opt) => (
@@ -357,25 +376,53 @@ export default function AnalyticsPage() {
                 <select
                   value={selectedPeriod}
                   onChange={(e) => setSelectedPeriod(e.target.value as any)}
-                  className="px-3 py-2 border border-secondary-300 rounded-lg text-sm bg-white"
+                  className="px-3 py-2 border border-secondary-300 rounded-lg text-sm bg-white text-secondary-900"
                 >
                   <option value="all">Todos</option>
-                  <option value="month">Último mes</option>
-                  <option value="quarter">Último trimestre</option>
-                  <option value="semester">Último semestre</option>
-                  <option value="year">Último año</option>
+                  <option value="month">Mes</option>
+                  <option value="quarter">Trimestre</option>
+                  <option value="semester">Semestre</option>
+                  <option value="year">Año</option>
                 </select>
+              </div>
+              <div className="flex flex-col sm:flex-row gap-2 items-start sm:items-center">
+                <label className="text-sm text-secondary-700 font-medium">Modo</label>
+                <div className="flex items-center bg-secondary-100 rounded-lg p-1">
+                  <button
+                    type="button"
+                    onClick={() => setPeriodMode('current')}
+                    className={`px-3 py-1.5 rounded-md text-xs font-medium transition-colors ${periodMode === 'current'
+                      ? 'bg-white text-secondary-900 shadow-sm'
+                      : 'text-secondary-600 hover:text-secondary-800'
+                    }`}
+                    disabled={selectedPeriod === 'all'}
+                  >
+                    Actual
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => setPeriodMode('rolling')}
+                    className={`px-3 py-1.5 rounded-md text-xs font-medium transition-colors ${periodMode === 'rolling'
+                      ? 'bg-white text-secondary-900 shadow-sm'
+                      : 'text-secondary-600 hover:text-secondary-800'
+                    }`}
+                    disabled={selectedPeriod === 'all'}
+                  >
+                    Móvil
+                  </button>
+                </div>
               </div>
             </div>
           </div>
 
           <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">
-            <StatCard title="Gasto total" value={formatCurrencyLocal(totalSpend)} icon={<Wallet className="w-5 h-5" />} />
-            <StatCard title="Nº tickets" value={formatNumber(ticketsCount)} icon={<Receipt className="w-5 h-5" />} />
-            <StatCard title="Ticket medio" value={formatCurrencyLocal(avgTicket)} icon={<TrendingUp className="w-5 h-5" />} />
+            <StatCard title="Gasto total" value={formatCurrencyLocal(totalSpend)} subtitle={infoRangeLabel} icon={<Wallet className="w-5 h-5" />} />
+            <StatCard title="Nº tickets" value={formatNumber(ticketsCount)} subtitle={infoRangeLabel} icon={<Receipt className="w-5 h-5" />} />
+            <StatCard title="Ticket medio" value={formatCurrencyLocal(avgTicket)} subtitle={infoRangeLabel} icon={<TrendingUp className="w-5 h-5" />} />
             <StatCard
               title="Comparativa"
               value={comparison ? formatComparison(comparison.diff, comparison.pct) : '—'}
+              subtitle={infoRangeLabel}
               icon={<BarChart3 className="w-5 h-5" />}
               valueClassName={comparison ? (comparison.diff <= 0 ? 'text-emerald-600' : 'text-red-600') : undefined}
             />
@@ -466,7 +513,7 @@ export default function AnalyticsPage() {
   )
 }
 
-function StatCard({ title, value, icon, valueClassName }: { title: string; value: string; icon: React.ReactNode; valueClassName?: string }) {
+function StatCard({ title, value, subtitle, icon, valueClassName }: { title: string; value: string; subtitle?: string; icon: React.ReactNode; valueClassName?: string }) {
   return (
     <div className="bg-white rounded-xl border border-secondary-200 p-4 flex items-center gap-3">
       <div className="w-10 h-10 rounded-lg bg-primary-50 text-primary-700 flex items-center justify-center">
@@ -475,6 +522,9 @@ function StatCard({ title, value, icon, valueClassName }: { title: string; value
       <div>
         <div className="text-xs text-secondary-500">{title}</div>
         <div className={`text-lg font-semibold ${valueClassName || 'text-secondary-900'}`}>{value}</div>
+        {subtitle && (
+          <div className="text-[11px] text-secondary-500 mt-1">{subtitle}</div>
+        )}
       </div>
     </div>
   )
@@ -578,25 +628,10 @@ function formatMonthYear(dateStr: string) {
   }
 }
 
-function getStartDate(period: 'all' | 'month' | 'quarter' | 'semester' | 'year') {
+function getPeriodRange(period: 'all' | 'month' | 'quarter' | 'semester' | 'year', mode: 'current' | 'rolling') {
   if (period === 'all') return null
-  const now = new Date()
-  const d = new Date(now)
-  switch (period) {
-    case 'month':
-      d.setMonth(d.getMonth() - 1)
-      break
-    case 'quarter':
-      d.setMonth(d.getMonth() - 3)
-      break
-    case 'semester':
-      d.setMonth(d.getMonth() - 6)
-      break
-    case 'year':
-      d.setFullYear(d.getFullYear() - 1)
-      break
-  }
-  return d
+  if (mode === 'current') return getPeriodRangeToDate(period)
+  return getRollingPeriodRange(period)
 }
 
 function formatNumber(value: number) {
@@ -695,6 +730,30 @@ function getPeriodRangeToDate(period: 'all' | 'month' | 'quarter' | 'semester' |
   const dayOffset = Math.floor((end.getTime() - start.getTime()) / (1000 * 60 * 60 * 24))
   const prevEnd = new Date(prevStart)
   prevEnd.setDate(prevEnd.getDate() + dayOffset)
+  return { start, end, prevStart, prevEnd }
+}
+
+function getRollingPeriodRange(period: 'all' | 'month' | 'quarter' | 'semester' | 'year') {
+  if (period === 'all') return null
+  const end = new Date()
+  const start = new Date(end)
+  switch (period) {
+    case 'month':
+      start.setMonth(start.getMonth() - 1)
+      break
+    case 'quarter':
+      start.setMonth(start.getMonth() - 3)
+      break
+    case 'semester':
+      start.setMonth(start.getMonth() - 6)
+      break
+    case 'year':
+      start.setFullYear(start.getFullYear() - 1)
+      break
+  }
+  const duration = end.getTime() - start.getTime()
+  const prevStart = new Date(start.getTime() - duration)
+  const prevEnd = new Date(end.getTime() - duration)
   return { start, end, prevStart, prevEnd }
 }
 

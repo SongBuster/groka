@@ -1184,7 +1184,7 @@ export default function TicketsPage() {
                     onFocus={() => setShowStoreDropdown(manualTicket.storeName.length >= 1)}
                     onBlur={() => setTimeout(() => setShowStoreDropdown(false), 200)}
                     placeholder="Ej: Mercadona Centro"
-                    className="w-full px-4 py-2 border border-secondary-300 rounded-lg focus:ring-2 focus:ring-primary-500 focus:border-transparent"
+                    className="w-full px-4 py-2 border border-secondary-300 rounded-lg focus:ring-2 focus:ring-primary-500 focus:border-transparent bg-white text-secondary-900 placeholder:text-secondary-400"
                   />
                   {showStoreDropdown && availableStores.filter(store => 
                     store.toLowerCase().includes(manualTicket.storeName.toLowerCase())
@@ -1216,7 +1216,7 @@ export default function TicketsPage() {
                     type="datetime-local"
                     value={manualTicket.purchaseDate}
                     onChange={(e) => setManualTicket({ ...manualTicket, purchaseDate: e.target.value })}
-                    className="w-full px-4 py-2 border border-secondary-300 rounded-lg focus:ring-2 focus:ring-primary-500 focus:border-transparent"
+                    className="w-full px-4 py-2 border border-secondary-300 rounded-lg focus:ring-2 focus:ring-primary-500 focus:border-transparent bg-white text-secondary-900 placeholder:text-secondary-400"
                   />
                 </div>
               </div>
@@ -1230,7 +1230,7 @@ export default function TicketsPage() {
                   value={manualTicket.ticketNumber}
                   onChange={(e) => setManualTicket({ ...manualTicket, ticketNumber: e.target.value })}
                   placeholder="Ej: 12345"
-                  className="w-full px-4 py-2 border border-secondary-300 rounded-lg focus:ring-2 focus:ring-primary-500 focus:border-transparent"
+                    className="w-full px-4 py-2 border border-secondary-300 rounded-lg focus:ring-2 focus:ring-primary-500 focus:border-transparent bg-white text-secondary-900 placeholder:text-secondary-400"
                 />
               </div>
 
@@ -1292,7 +1292,7 @@ export default function TicketsPage() {
                                   }, 200)
                                 }}
                                 placeholder="Buscar o crear producto..."
-                                className="w-full px-3 py-2 border-2 border-primary-300 rounded-lg focus:ring-2 focus:ring-primary-500 focus:border-primary-500 text-sm uppercase"
+                                className="w-full px-3 py-2 border-2 border-primary-300 rounded-lg focus:ring-2 focus:ring-primary-500 focus:border-primary-500 text-sm uppercase bg-white text-secondary-900 placeholder:text-secondary-400"
                               />
                               {product.showDropdown && (product.name || '').length >= 2 && (
                                 <div className="absolute top-full left-0 right-0 mt-1 bg-white border border-secondary-300 rounded-lg shadow-lg max-h-48 overflow-y-auto z-50">
@@ -1373,7 +1373,7 @@ export default function TicketsPage() {
                               placeholder={product.productType === 'unit' ? 'Ej: 2' : 'Ej: 0.5'}
                               min="0"
                               step={product.productType === 'unit' ? '1' : '0.001'}
-                              className="w-full px-3 py-2 border border-secondary-300 rounded-lg focus:ring-2 focus:ring-primary-500 focus:border-transparent text-sm"
+                              className="w-full px-3 py-2 border border-secondary-300 rounded-lg focus:ring-2 focus:ring-primary-500 focus:border-transparent text-sm bg-white text-secondary-900 placeholder:text-secondary-400"
                             />
                           </div>
                           
@@ -1388,7 +1388,7 @@ export default function TicketsPage() {
                               placeholder="0.00"
                               min="0"
                               step="0.01"
-                              className="w-full px-3 py-2 border border-secondary-300 rounded-lg focus:ring-2 focus:ring-primary-500 focus:border-transparent text-sm"
+                              className="w-full px-3 py-2 border border-secondary-300 rounded-lg focus:ring-2 focus:ring-primary-500 focus:border-transparent text-sm bg-white text-secondary-900 placeholder:text-secondary-400"
                             />
                           </div>
                           
