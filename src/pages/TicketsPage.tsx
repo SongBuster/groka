@@ -429,7 +429,8 @@ export default function TicketsPage() {
             quantity: p.quantity,
             unit_price: p.unitPrice,
             total: p.total
-          }))
+          })),
+          user.id
         )
       } else if (pdfFile) {
         // Crear ticket desde PDF - uploadAndParseTicket ya crea el ticket completo
@@ -450,7 +451,8 @@ export default function TicketsPage() {
             quantity: p.quantity,
             unit_price: p.unitPrice,
             total: p.total
-          }))
+          })),
+          user.id
         )
       } else {
         // Crear ticket manual (sin PDF)

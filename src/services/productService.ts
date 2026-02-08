@@ -23,6 +23,23 @@ export type ProductStats = {
   reviewed: number
 }
 
+export type ProductPricePoint = {
+  date: string
+  price: number
+}
+
+export type ProductStatsDetail = {
+  firstPurchasedAt: string | null
+  lastPurchasedAt: string | null
+  purchaseCount: number
+  averageDaysBetweenPurchases: number | null
+  maxPrice: { value: number; date: string } | null
+  minPrice: { value: number; date: string } | null
+  lastPrice: { value: number; date: string } | null
+  averagePrice: number | null
+  priceHistory: ProductPricePoint[]
+}
+
 class ProductService {
   async getAll(userId: string): Promise<ProductWithCategory[]> {
     const { data, error } = await supabase
@@ -202,6 +219,120 @@ class ProductService {
     } catch (err) {
       console.error('Error in getLastPrice:', err)
       return null
+    }
+  }
+
+  /**
+   * Get detailed product stats based on ticket history
+   */
+  async getProductStats(productId: string, userId: string): Promise<ProductStatsDetail> {
+    try {
+      const { data, error } = await supabase
+        .from('ticket_items')
+        .select('unit_price, total_price, quantity, created_at, tickets!inner(purchase_date, user_id)')
+        .eq('product_id', productId)
+        .eq('tickets.user_id', userId)
+        .order('created_at', { ascending: true })
+
+      if (error) throw error
+
+      const rows = (data as any[]) || []
+      if (rows.length === 0) {
+        return {
+          firstPurchasedAt: null,
+          lastPurchasedAt: null,
+          purchaseCount: 0,
+          averageDaysBetweenPurchases: null,
+          maxPrice: null,
+          minPrice: null,
+          lastPrice: null,
+          averagePrice: null,
+          priceHistory: []
+        }
+      }
+
+      const priceHistory: ProductPricePoint[] = []
+      const purchaseDates: Date[] = []
+
+      for (const row of rows) {
+        const dateStr = row.tickets?.purchase_date || row.created_at
+        if (!dateStr) continue
+        const date = new Date(dateStr)
+        purchaseDates.push(date)
+
+        const quantity = row.quantity || 1
+        const unit = row.unit_price ?? (row.total_price != null ? row.total_price / quantity : null)
+        if (unit != null && Number.isFinite(unit)) {
+          priceHistory.push({
+            date: date.toISOString(),
+            price: Number(unit)
+          })
+        }
+      }
+
+      purchaseDates.sort((a, b) => a.getTime() - b.getTime())
+      priceHistory.sort((a, b) => new Date(a.date).getTime() - new Date(b.date).getTime())
+
+      let averageDaysBetweenPurchases: number | null = null
+      if (purchaseDates.length >= 2) {
+        const intervals: number[] = []
+        for (let i = 1; i < purchaseDates.length; i++) {
+          const diff = (purchaseDates[i].getTime() - purchaseDates[i - 1].getTime()) / (1000 * 60 * 60 * 24)
+          intervals.push(diff)
+        }
+        if (intervals.length > 0) {
+          averageDaysBetweenPurchases = intervals.reduce((a, b) => a + b, 0) / intervals.length
+        }
+      }
+
+      let maxPrice: { value: number; date: string } | null = null
+      let minPrice: { value: number; date: string } | null = null
+      let lastPrice: { value: number; date: string } | null = null
+      let averagePrice: number | null = null
+
+      if (priceHistory.length > 0) {
+        let sum = 0
+        for (const p of priceHistory) {
+          sum += p.price
+          if (!maxPrice || p.price > maxPrice.value) maxPrice = { value: p.price, date: p.date }
+          if (!minPrice || p.price < minPrice.value) minPrice = { value: p.price, date: p.date }
+        }
+        averagePrice = sum / priceHistory.length
+        const last = priceHistory[priceHistory.length - 1]
+        lastPrice = { value: last.price, date: last.date }
+      }
+
+      const firstPurchasedAt = purchaseDates.length > 0
+        ? purchaseDates[0].toISOString()
+        : null
+      const lastPurchasedAt = purchaseDates.length > 0
+        ? purchaseDates[purchaseDates.length - 1].toISOString()
+        : null
+
+      return {
+        firstPurchasedAt,
+        lastPurchasedAt,
+        purchaseCount: purchaseDates.length,
+        averageDaysBetweenPurchases,
+        maxPrice,
+        minPrice,
+        lastPrice,
+        averagePrice,
+        priceHistory
+      }
+    } catch (error) {
+      console.error('Error getting product stats:', error)
+      return {
+        firstPurchasedAt: null,
+        lastPurchasedAt: null,
+        purchaseCount: 0,
+        averageDaysBetweenPurchases: null,
+        maxPrice: null,
+        minPrice: null,
+        lastPrice: null,
+        averagePrice: null,
+        priceHistory: []
+      }
     }
   }
 

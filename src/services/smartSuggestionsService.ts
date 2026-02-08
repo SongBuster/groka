@@ -32,41 +32,66 @@ class SmartSuggestionsService {
     urgencyThreshold: number = 0.8
   ): Promise<ProductSuggestion[]> {
     try {
-      // 1. Obtener todos los ticket_items con sus fechas de compra
-      const { data: ticketItems, error } = await supabase
-        .from('ticket_items')
-        .select(`
-          product_id,
-          name,
-          created_at,
-          tickets!inner(
-            user_id,
-            purchase_date,
-            created_at
-          ),
-          products(
-            name,
-            category_id,
-            categories(
-              name,
-              icon
-            )
-          )
-        `)
-        .eq('tickets.user_id', userId)
-        .not('product_id', 'is', null)
-        .order('created_at', { ascending: true })
+      // 1. Obtener todos los ticket_items con sus fechas de compra (paginado)
+      const pageSize = 1000
+      let page = 0
+      let ticketItems: any[] = []
 
-      if (error) {
-        console.error('Error fetching ticket items:', error)
-        throw error
+      while (true) {
+        const from = page * pageSize
+        const to = from + pageSize - 1
+
+        const { data, error } = await supabase
+          .from('ticket_items')
+          .select(`
+            product_id,
+            name,
+            created_at,
+            tickets!inner(
+              user_id,
+              purchase_date,
+              created_at
+            ),
+            products(
+              name,
+              category_id,
+              categories(
+                name,
+                icon
+              )
+            )
+          `)
+          .eq('tickets.user_id', userId)
+          .not('product_id', 'is', null)
+          .order('created_at', { ascending: true })
+          .range(from, to)
+
+        if (error) {
+          console.error('Error fetching ticket items:', error)
+          throw error
+        }
+
+        const batch = (data as any[]) || []
+        ticketItems = ticketItems.concat(batch)
+
+        if (batch.length < pageSize) break
+        page += 1
       }
 
-      if (!ticketItems || ticketItems.length === 0) {
+      if (ticketItems.length === 0) {
         return []
       }
 
-      // 2. Agrupar por producto y calcular estadísticas
+      // Normalization: lowercase, strip accents, punctuation, collapse spaces
+      const normalize = (s: string) => s
+        .toLowerCase()
+        .normalize('NFD')
+        .replace(/\p{Diacritic}+/gu, '')
+        .replace(/[\p{P}\p{S}]+/gu, ' ')
+        .replace(/\s+/g, ' ')
+        .trim()
+
+      // 2. Agrupar por product_id y calcular estadísticas
       const productMap = new Map<string, {
         product_id: string
         product_name: string
@@ -81,6 +106,7 @@ class SmartSuggestionsService {
 
         const purchaseDate = new Date(item.tickets?.purchase_date || item.tickets?.created_at || item.created_at)
         const productName = item.products?.name || item.name
+        if (!productName) continue
         const categoryId = item.products?.category_id || null
         const categoryName = item.products?.categories?.name || null
         const categoryIcon = item.products?.categories?.icon || null
@@ -94,16 +120,50 @@ class SmartSuggestionsService {
             category_icon: categoryIcon,
             purchase_dates: []
           })
+        } else {
+          const existing = productMap.get(item.product_id)!
+          const lastKnown = existing.purchase_dates[existing.purchase_dates.length - 1]
+          if (!lastKnown || purchaseDate.getTime() >= lastKnown.getTime()) {
+            existing.product_name = productName
+            existing.category_id = categoryId
+            existing.category_name = categoryName
+            existing.category_icon = categoryIcon
+          }
         }
 
         productMap.get(item.product_id)!.purchase_dates.push(purchaseDate)
       }
 
-      // 3. Calcular sugerencias
+      // 3. Calcular la compra más reciente por nombre (evita duplicados con mismo nombre)
+      const latestByName = new Map<string, Date>()
+      for (const data of productMap.values()) {
+        if (!data.product_name || data.purchase_dates.length === 0) continue
+        const maxTs = Math.max(...data.purchase_dates.map(d => d.getTime()))
+        const last = new Date(maxTs)
+        const key = normalize(data.product_name)
+        const existing = latestByName.get(key)
+        if (!existing || last.getTime() > existing.getTime()) {
+          latestByName.set(key, last)
+        }
+      }
+
+      // 4. Calcular sugerencias
       const suggestions: ProductSuggestion[] = []
       const now = new Date()
+      const hiddenProductIds = await suggestionPreferencesService.getHiddenProductIds(userId)
 
-      for (const [productId, data] of productMap.entries()) {
+      for (const [, data] of productMap.entries()) {
+        // Filtrar productos ocultos
+        if (hiddenProductIds.has(data.product_id)) continue
+
+        // Filtrar duplicados por nombre (quedarse con el más reciente)
+        const nameKey = normalize(data.product_name)
+        const latestForName = latestByName.get(nameKey)
+        if (latestForName && data.purchase_dates.length > 0) {
+          const lastForProduct = new Date(Math.max(...data.purchase_dates.map(d => d.getTime())))
+          if (lastForProduct.getTime() < latestForName.getTime()) continue
+        }
+
         // Filtrar productos con suficiente historial
         if (data.purchase_dates.length < minPurchases) continue
 
@@ -167,7 +227,7 @@ class SmartSuggestionsService {
         // Solo sugerir si ha pasado suficiente tiempo
         if (urgencyScore >= urgencyThreshold) {
           suggestions.push({
-            product_id: productId,
+            product_id: data.product_id,
             product_name: data.product_name,
             category_id: data.category_id,
             category_name: data.category_name,
@@ -181,12 +241,8 @@ class SmartSuggestionsService {
         }
       }
 
-      // 4. Filtrar productos ocultos por el usuario
-      const hiddenProductIds = await suggestionPreferencesService.getHiddenProductIds(userId)
-      const suggestionsAfterHiding = suggestions.filter(s => !hiddenProductIds.has(s.product_id))
-
       // 5. Filtrar productos ya en la lista actual (si se proporciona)
-      let finalSuggestions = suggestionsAfterHiding
+      let finalSuggestions = suggestions
       
       if (shoppingListId) {
         const { data: currentItems } = await supabase
@@ -207,7 +263,7 @@ class SmartSuggestionsService {
           
           const currentNames = new Set((currentItems as any[]).map((i: any) => normalize(i.name)))
           
-          finalSuggestions = suggestionsAfterHiding.filter(s => 
+          finalSuggestions = suggestions.filter(s => 
             !currentNames.has(normalize(s.product_name))
           )
         }

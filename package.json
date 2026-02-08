@@ -17,7 +17,7 @@
   "dependencies": {
     "@supabase/supabase-js": "^2.83.0",
     "@tailwindcss/postcss": "^4.1.17",
-    "@vercel/node": "^5.5.14",
+    "@vercel/node": "^4.0.0",
     "autoprefixer": "^10.4.22",
     "date-fns": "^4.1.0",
     "googleapis": "^166.0.0",
@@ -37,6 +37,7 @@
     "@types/react": "^19.2.2",
     "@types/react-dom": "^19.2.2",
     "@vitejs/plugin-react": "^5.1.0",
+    "baseline-browser-mapping": "^2.9.19",
     "eslint": "^9.39.1",
     "eslint-plugin-react-hooks": "^7.0.1",
     "eslint-plugin-react-refresh": "^0.4.24",

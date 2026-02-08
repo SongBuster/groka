@@ -38,5 +38,9 @@ Thumbs.db
 # Supabase
 .supabase
 supabase.password
+supabase/.branches
+supabase/.temp
+supabase/seed
+supabase/seed.sql
 .vercel
 src/version.ts

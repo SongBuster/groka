@@ -92,7 +92,7 @@ export class TicketService {
 
       // 4. Insert ticket items if parsing was successful
       if (parsed && products.length > 0) {
-        await this.saveTicketItems(ticket.id, products, supermarketId, purchaseDate)
+        await this.saveTicketItems(ticket.id, products, supermarketId, purchaseDate, userId)
       }
 
       return ticket
@@ -105,10 +105,10 @@ export class TicketService {
   /**
    * Save parsed products as ticket items
    */
-  private async saveTicketItems(ticketId: string, products: any[], supermarketId: string | null, purchaseDate: string | null): Promise<void> {
+  private async saveTicketItems(ticketId: string, products: any[], supermarketId: string | null, purchaseDate: string | null, userId: string): Promise<void> {
     try {
       // First, ensure products exist in the catalog
-      const productIds = await this.ensureProductsExist(products)
+      const productIds = await this.ensureProductsExist(products, userId)
 
       // Insert ticket items
       const items = products.map((product, index) => ({
@@ -172,16 +172,22 @@ export class TicketService {
    * Ensure products exist in the catalog, create if they don't
    * Returns array of product IDs
    */
-  private async ensureProductsExist(products: any[]): Promise<(string | null)[]> {
+  private async ensureProductsExist(products: any[], userId: string): Promise<(string | null)[]> {
     const productIds: (string | null)[] = []
 
     for (const product of products) {
       try {
+        const productName = (product.item_name || product.name || product.product_name || '').trim()
+        if (!productName) {
+          productIds.push(null)
+          continue
+        }
         // Check if product exists
         const { data: existing } = await supabase
           .from('products')
           .select('id')
-          .eq('name', product.item_name)
+          .eq('name', productName)
+          .eq('user_id', userId)
           .maybeSingle() as { data: { id: string } | null }
 
         if (existing) {
@@ -190,10 +196,13 @@ export class TicketService {
           // Create new product
           const { data: newProduct, error } = await supabase
             .from('products')
-            .insert({ 
-              name: product.item_name,
-              category_id: null 
-            } as any)
+            .upsert({
+              name: productName,
+              category_id: null,
+              user_id: userId
+            } as any, {
+              onConflict: 'user_id,name'
+            })
             .select('id')
             .single() as { data: { id: string } | null, error: any }
 
@@ -203,7 +212,8 @@ export class TicketService {
               const { data: duplicate } = await supabase
                 .from('products')
                 .select('id')
-                .eq('name', product.item_name)
+                .eq('name', productName)
+                .eq('user_id', userId)
                 .maybeSingle() as { data: { id: string } | null }
               
               if (duplicate) {
@@ -251,7 +261,7 @@ export class TicketService {
   /**
    * Process a single pending ticket by downloading and parsing its PDF
    */
-  private async processTicketFile(ticket: { id: string; file_url: string | null; file_name: string | null }): Promise<void> {
+  private async processTicketFile(ticket: { id: string; user_id: string; file_url: string | null; file_name: string | null }): Promise<void> {
     if (!ticket.file_url) throw new Error('El ticket no tiene archivo asociado')
 
     // Extract storage path from public URL or use file_url directly
@@ -306,15 +316,30 @@ export class TicketService {
 
     // Insert items
     if (parsedData.products && parsedData.products.length > 0) {
-      const items = parsedData.products.map((p: any) => ({
-        ticket_id: ticket.id,
-        product_name: p.item_name || p.name || 'Producto',
+      const normalizedProducts = parsedData.products.map((p: any) => ({
+        item_name: p.item_name || p.name || 'Producto',
         quantity: p.quantity ?? p.weight_kg ?? p.cantidad ?? 1,
         unit_price: p.unit_price ?? p.price_per_kg ?? p.precioUnitario ?? null,
-        total_price: p.total ?? p.totalPrice ?? p.precioTotal ?? null,
+        total: p.total ?? p.totalPrice ?? p.precioTotal ?? 0,
       }))
+
+      const productIds = await this.ensureProductsExist(normalizedProducts, ticket.user_id)
+
+      const items = normalizedProducts.map((p, idx) => ({
+        ticket_id: ticket.id,
+        product_id: productIds[idx],
+        name: p.item_name,
+        quantity: p.quantity,
+        unit_price: p.unit_price,
+        total_price: p.total
+      }))
+
       const { error: itemsErr } = await supabase.from('ticket_items').insert(items as any)
       if (itemsErr) console.warn('Insert items error', itemsErr)
+
+      if (parsedData.supermarketId && parsedData.date) {
+        await this.updateProductSupermarketAssociations(productIds, normalizedProducts, parsedData.supermarketId, parsedData.date)
+      }
     }
   }
 
@@ -397,7 +422,7 @@ export class TicketService {
 
       // Process products and save ticket items
       if (products.length > 0) {
-        await this.saveManualTicketItems(ticket.id, products, supermarketId, purchaseTimestamp)
+        await this.saveManualTicketItems(ticket.id, products, supermarketId, purchaseTimestamp, userId)
       }
 
       return ticket
@@ -421,7 +446,8 @@ export class TicketService {
       total: number
     }>,
     supermarketId: string | null = null,
-    purchaseDate: string | null = null
+    purchaseDate: string | null = null,
+    userId?: string
   ): Promise<void> {
     try {
       const items = []
@@ -432,7 +458,7 @@ export class TicketService {
 
         // Si no existe el producto, crearlo
         if (!productId) {
-          productId = await this.createProductFromTicket(product.name)
+          productId = await this.createProductFromTicket(product.name, userId)
         }
 
         productIds.push(productId)
@@ -482,13 +508,19 @@ export class TicketService {
   /**
    * Create a new product from ticket (with auto-categorization)
    */
-  private async createProductFromTicket(productName: string): Promise<string> {
+  private async createProductFromTicket(productName: string, userId?: string): Promise<string> {
     try {
       // Primero verificar si ya existe
-      const { data: existing } = await supabase
+      let existingQuery = supabase
         .from('products')
         .select('id')
         .eq('name', productName)
+
+      if (userId) {
+        existingQuery = existingQuery.eq('user_id', userId)
+      }
+
+      const { data: existing } = await existingQuery
         .maybeSingle() as { data: { id: string } | null }
 
       if (existing) {
@@ -498,20 +530,29 @@ export class TicketService {
       // Create product directly (will auto-categorize based on keywords via trigger)
       const { data: newProduct, error } = await supabase
         .from('products')
-        .insert({
+        .upsert({
           name: productName,
-          category_id: null
-        } as any)
+          category_id: null,
+          ...(userId ? { user_id: userId } : {})
+        } as any, {
+          onConflict: userId ? 'user_id,name' : 'name'
+        })
         .select('id')
         .single() as { data: { id: string } | null, error: any }
 
       if (error) {
         // Si es error de duplicado, buscar el producto
         if (error.code === '23505') {
-          const { data: duplicate } = await supabase
+          let duplicateQuery = supabase
             .from('products')
             .select('id')
             .eq('name', productName)
+
+          if (userId) {
+            duplicateQuery = duplicateQuery.eq('user_id', userId)
+          }
+
+          const { data: duplicate } = await duplicateQuery
             .maybeSingle() as { data: { id: string } | null }
           
           if (duplicate) {
@@ -549,7 +590,8 @@ export class TicketService {
       quantity: number
       unit_price: number
       total: number
-    }>
+    }>,
+    userId?: string
   ): Promise<void> {
     try {
       // Calculate total amount
@@ -583,7 +625,7 @@ export class TicketService {
 
       // Insert new items
       if (products.length > 0) {
-        await this.saveManualTicketItems(ticketId, products, supermarketId, purchaseTimestamp)
+        await this.saveManualTicketItems(ticketId, products, supermarketId, purchaseTimestamp, userId)
       }
     } catch (error) {
       console.error('Error updating ticket:', error)
@@ -647,7 +689,7 @@ export class TicketService {
     // 1. Fetch pending tickets for user
     const { data: pending, error } = await supabase
       .from('tickets')
-      .select('id, file_url, file_name')
+      .select('id, user_id, file_url, file_name')
       .eq('user_id', userId)
       .eq('parsed', false)
 
@@ -675,9 +717,9 @@ export class TicketService {
   async processPendingTicket(ticketId: string): Promise<{ success: boolean; error?: string }> {
     const { data, error } = await supabase
       .from('tickets')
-      .select('id, file_url, file_name, parsed')
+      .select('id, user_id, file_url, file_name, parsed')
       .eq('id', ticketId)
-      .maybeSingle() as { data: { id: string; file_url: string | null; file_name: string | null; parsed: boolean } | null, error: any }
+      .maybeSingle() as { data: { id: string; user_id: string; file_url: string | null; file_name: string | null; parsed: boolean } | null, error: any }
 
     if (error) throw error
     if (!data) return { success: false, error: 'Ticket no encontrado' }

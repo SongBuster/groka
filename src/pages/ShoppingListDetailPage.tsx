@@ -8,7 +8,7 @@ import suggestionPreferencesService from '../services/suggestionPreferencesServi
 import { useDialog } from '../hooks/useDialog'
 import CustomSelect from '../components/CustomSelect'
 import NumericKeyboardModal from '../components/NumericKeyboardModal'
-import { Plus, Trash2, Edit2, ChevronDown, ChevronRight, Sparkles, X, Menu, CheckCheck, XCircle, Trash, Download } from 'lucide-react'
+import { Plus, Trash2, Edit2, ChevronDown, ChevronRight, Sparkles, X, Menu, CheckCheck, XCircle, Trash, Download, RefreshCcw } from 'lucide-react'
 
 export default function ShoppingListDetailPage() {
   const { id } = useParams()
@@ -638,16 +638,30 @@ export default function ShoppingListDetailPage() {
           {/* Smart Suggestions Section */}
           {smartSuggestions.length > 0 && (
             <div>
-              <button
-                className="w-full text-left mb-3 flex items-center gap-2"
-                onClick={() => setShowSmartSuggestions(!showSmartSuggestions)}
-              >
-                {showSmartSuggestions ? <ChevronDown className="w-4 h-4 text-primary-600" /> : <ChevronRight className="w-4 h-4 text-primary-600" />}
-                <Sparkles className="w-5 h-5 text-primary-600" />
-                <span className="text-lg font-semibold text-primary-700">
-                  Sugerencias inteligentes ({smartSuggestions.length})
-                </span>
-              </button>
+              <div className="flex items-center justify-between mb-3">
+                <button
+                  className="text-left flex items-center gap-2"
+                  onClick={() => setShowSmartSuggestions(!showSmartSuggestions)}
+                >
+                  {showSmartSuggestions ? <ChevronDown className="w-4 h-4 text-primary-600" /> : <ChevronRight className="w-4 h-4 text-primary-600" />}
+                  <Sparkles className="w-5 h-5 text-primary-600" />
+                  <span className="text-lg font-semibold text-primary-700">
+                    Sugerencias inteligentes ({smartSuggestions.length})
+                  </span>
+                </button>
+                <button
+                  onClick={async () => {
+                    setShowSmartSuggestions(true)
+                    await loadSmartSuggestions()
+                  }}
+                  disabled={loadingSmartSuggestions}
+                  className="inline-flex items-center gap-2 px-3 py-1.5 text-sm text-primary-700 border border-primary-300 rounded-lg hover:bg-primary-50 transition disabled:opacity-60 disabled:cursor-not-allowed"
+                  title="Recargar sugerencias"
+                >
+                  <RefreshCcw className={`w-4 h-4 ${loadingSmartSuggestions ? 'animate-spin' : ''}`} />
+                  {loadingSmartSuggestions ? 'Recargando…' : 'Recargar'}
+                </button>
+              </div>
               {showSmartSuggestions && (
                 <div className="space-y-2 mb-4">
                   <p className="text-sm text-secondary-600 mb-3 px-1">
