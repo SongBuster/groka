@@ -2,7 +2,7 @@ import { Link, useLocation, Outlet } from 'react-router-dom'
 import { useAuthStore } from '../stores/authStore'
 import { useProductsCount } from '../hooks/useProductsCount'
 import SessionExpiredHandler from './SessionExpiredHandler'
-import { LogOut, Receipt, Package, ShoppingCart } from 'lucide-react'
+import { LogOut, Receipt, Package, ShoppingCart, BarChart3 } from 'lucide-react'
 import { VERSION_INFO } from '../version'
 import { useEffect } from 'react'
 import { useDialog } from '../hooks/useDialog'
@@ -24,9 +24,12 @@ export default function Layout() {
 
   const navigation = [
     { name: 'Tickets', path: '/tickets', icon: Receipt },
+    { name: 'Análisis', path: '/analytics', icon: BarChart3 },
     { name: 'Productos', path: '/products', icon: Package },
     { name: 'Listas', path: '/shopping-lists', icon: ShoppingCart },
   ]
+
+  const mobileNavigation = navigation.filter(item => item.path !== '/analytics')
 
   const isActive = (path: string) => location.pathname === path
 
@@ -154,7 +157,7 @@ export default function Layout() {
       {/* Mobile Bottom Navigation */}
       <nav className="md:hidden fixed bottom-0 left-0 right-0 bg-white border-t border-primary-200 shadow-lg z-10">
         <div className="grid grid-cols-3 gap-1 px-2 py-2">
-          {navigation.map((item) => {
+          {mobileNavigation.map((item) => {
             const Icon = item.icon
             const showBadge = item.path === '/products' && productsNeedingAttention > 0
             return (
