@@ -24,23 +24,6 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
     return res.status(401).json({ error: 'Unauthorized' })
   }
 
-  const adminEmails = (process.env.GMAIL_POLLER_ADMIN_EMAILS || '')
-    .split(',')
-    .map(s => s.trim().toLowerCase())
-    .filter(Boolean)
-  const adminUserIds = (process.env.GMAIL_POLLER_ADMIN_USER_IDS || '')
-    .split(',')
-    .map(s => s.trim())
-    .filter(Boolean)
-
-  const email = (userData.user.email || '').toLowerCase()
-  const isAdmin = (adminEmails.length > 0 && adminEmails.includes(email))
-    || (adminUserIds.length > 0 && adminUserIds.includes(userData.user.id))
-
-  if (!isAdmin) {
-    return res.status(403).json({ error: 'Forbidden' })
-  }
-
   const secret = process.env.GMAIL_POLLER_SECRET
   if (!secret) {
     return res.status(500).json({ error: 'GMAIL_POLLER_SECRET not configured' })
