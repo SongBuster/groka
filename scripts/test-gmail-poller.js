@@ -10,7 +10,7 @@
  *   node scripts/test-gmail-poller.js https://groka.vercel.app
  */
 
-const baseUrl = process.argv[2] || 'http://localhost:5173'
+const baseUrl = process.argv[2] || process.env.GMAIL_POLLER_BASE_URL || 'http://localhost:3000'
 const secret = process.env.GMAIL_POLLER_SECRET
 
 if (!secret) {
@@ -29,11 +29,17 @@ fetch(`${baseUrl}/api/email/gmail-poller`, {
   },
 })
   .then(async (res) => {
-    const data = await res.json()
+    const text = await res.text()
+    let data
+    try {
+      data = JSON.parse(text)
+    } catch {
+      data = text
+    }
     if (res.ok) {
-      console.log('✅ Success:', data)
+      console.log(`✅ Success (${res.status})`, data)
     } else {
-      console.error('❌ Error:', data)
+      console.error(`❌ Error (${res.status})`, data)
     }
   })
   .catch((error) => {

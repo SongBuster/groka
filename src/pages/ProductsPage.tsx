@@ -1,6 +1,6 @@
 import { useState, useEffect } from 'react'
-import { Search, CheckCircle, AlertCircle, Clock, Edit2, Plus, Trash2, RefreshCcw, X } from 'lucide-react'
-import productService, { type ProductWithCategory, type ProductStatsDetail, type ProductPricePoint } from '../services/productService'
+import { Search, CheckCircle, AlertCircle, Clock, Edit2, Plus, Trash2, RefreshCcw } from 'lucide-react'
+import productService, { type ProductWithCategory, type ProductStatsDetail } from '../services/productService'
 import categoryService from '../services/categoryService'
 import catalogService from '../services/catalogService'
 import type { Database } from '../types/database'
@@ -9,7 +9,7 @@ import { useDialog } from '../hooks/useDialog'
 import CustomSelect from '../components/CustomSelect'
 import AliasManager from '../components/AliasManager'
 import { notifyProductsUpdated } from '../hooks/useProductsCount'
-import { formatCurrency, formatDate } from '../lib/formatters'
+import ProductDetailsModal from '../components/ProductDetailsModal'
 
 type Category = Database['public']['Tables']['categories']['Row']
 type ReviewStatus = 'pending' | 'uncategorized' | 'reviewed' | 'all'
@@ -38,11 +38,11 @@ export default function ProductsPage() {
   const [selectedProduct, setSelectedProduct] = useState<ProductWithCategory | null>(null)
   const [productStats, setProductStats] = useState<ProductStatsDetail | null>(null)
   const [loadingStats, setLoadingStats] = useState(false)
-  const [chartTab, setChartTab] = useState<'price' | 'frequency'>('price')
 
   useEffect(() => {
     loadData()
   }, [])
+
 
   const loadData = async () => {
     setLoading(true)
@@ -203,7 +203,6 @@ export default function ProductsPage() {
     setSelectedProduct(product)
     setShowDetailsModal(true)
     setProductStats(null)
-    setChartTab('price')
     if (!user?.id) return
     setLoadingStats(true)
     try {
@@ -556,170 +555,22 @@ export default function ProductsPage() {
         </div>
       )}
 
-      {/* Product Details Modal */}
-      {showDetailsModal && selectedProduct && (
-        <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50 p-4">
-          <div className="bg-white rounded-2xl max-w-3xl w-full p-6 max-h-[90vh] overflow-y-auto">
-            <div className="flex items-start justify-between gap-4 mb-4">
-              <div>
-                <h3 className="text-2xl font-bold text-secondary-900">
-                  {selectedProduct.name}
-                </h3>
-                <p className="text-sm text-secondary-600">
-                  {selectedProduct.category ? `${selectedProduct.category.icon} ${selectedProduct.category.name}` : 'Sin categoría'}
-                </p>
-              </div>
-              <button
-                onClick={closeDetailsModal}
-                className="p-2 rounded-lg hover:bg-secondary-100 transition"
-                title="Cerrar"
-              >
-                <X className="w-5 h-5 text-secondary-600" />
-              </button>
-            </div>
-
-            <div className="space-y-6">
-              <div className="w-full">
-                <h4 className="text-sm font-semibold text-secondary-700 mb-2">Aliases</h4>
-                {selectedProduct.aliases && selectedProduct.aliases.length > 0 ? (
-                  <div className="flex flex-wrap gap-2">
-                    {selectedProduct.aliases.map((alias) => (
-                      <span key={alias} className="px-2 py-1 text-xs bg-secondary-100 text-secondary-700 rounded">
-                        {alias}
-                      </span>
-                    ))}
-                  </div>
-                ) : (
-                  <p className="text-sm text-secondary-400">Sin aliases</p>
-                )}
-              </div>
-
-              <div className="bg-secondary-50 rounded-xl p-4">
-                <h4 className="text-sm font-semibold text-secondary-700 mb-3">Estadísticas</h4>
-                {loadingStats ? (
-                  <p className="text-sm text-secondary-600">Cargando estadísticas…</p>
-                ) : productStats ? (
-                  <div className="grid grid-cols-2 gap-3">
-                    <div>
-                      <div className="text-xs text-secondary-500">Primera compra</div>
-                      <div className="text-sm font-medium text-secondary-900">
-                        {productStats.firstPurchasedAt ? formatDate(productStats.firstPurchasedAt) : '—'}
-                      </div>
-                    </div>
-                    <div>
-                      <div className="text-xs text-secondary-500">Última compra</div>
-                      <div className="text-sm font-medium text-secondary-900">
-                        {productStats.lastPurchasedAt ? formatDate(productStats.lastPurchasedAt) : '—'}
-                      </div>
-                    </div>
-                    <div>
-                      <div className="text-xs text-secondary-500">Veces comprado</div>
-                      <div className="text-sm font-medium text-secondary-900">
-                        {productStats.purchaseCount}
-                      </div>
-                    </div>
-                    <div>
-                      <div className="text-xs text-secondary-500">Promedio días</div>
-                      <div className="text-sm font-medium text-secondary-900">
-                        {productStats.averageDaysBetweenPurchases != null ? Math.round(productStats.averageDaysBetweenPurchases) : '—'}
-                      </div>
-                    </div>
-                    <div>
-                      <div className="text-xs text-secondary-500">Precio promedio</div>
-                      <div className="text-sm font-medium text-secondary-900">
-                        {productStats.averagePrice != null ? formatCurrency(productStats.averagePrice) : '—'}
-                      </div>
-                    </div>
-                    <div>
-                      <div className="text-xs text-secondary-500">Precio máximo</div>
-                      <div className="text-sm font-medium text-secondary-900">
-                        {productStats.maxPrice ? `${formatCurrency(productStats.maxPrice.value)} · ${formatDate(productStats.maxPrice.date)}` : '—'}
-                      </div>
-                    </div>
-                    <div>
-                      <div className="text-xs text-secondary-500">Precio mínimo</div>
-                      <div className="text-sm font-medium text-secondary-900">
-                        {productStats.minPrice ? `${formatCurrency(productStats.minPrice.value)} · ${formatDate(productStats.minPrice.date)}` : '—'}
-                      </div>
-                    </div>
-                    <div className="col-span-2">
-                      <div className="text-xs text-secondary-500">Último precio</div>
-                      <div className="text-sm font-medium text-secondary-900">
-                        {productStats.lastPrice ? `${formatCurrency(productStats.lastPrice.value)} · ${formatDate(productStats.lastPrice.date)}` : '—'}
-                      </div>
-                    </div>
-                  </div>
-                ) : (
-                  <p className="text-sm text-secondary-600">Sin datos aún.</p>
-                )}
-              </div>
-
-              <div className="bg-white border border-secondary-200 rounded-xl p-4">
-                <div className="flex items-center justify-between gap-4 mb-3">
-                  <h4 className="text-sm font-semibold text-secondary-700">Gráficas</h4>
-                  <div className="flex gap-2">
-                    <button
-                      onClick={() => setChartTab('price')}
-                      className={`px-3 py-1.5 text-xs font-medium rounded-lg border transition ${
-                        chartTab === 'price'
-                          ? 'bg-primary-600 text-white border-primary-600'
-                          : 'bg-white text-secondary-700 border-secondary-300 hover:bg-secondary-50'
-                      }`}
-                    >
-                      Precios
-                    </button>
-                    <button
-                      onClick={() => setChartTab('frequency')}
-                      className={`px-3 py-1.5 text-xs font-medium rounded-lg border transition ${
-                        chartTab === 'frequency'
-                          ? 'bg-primary-600 text-white border-primary-600'
-                          : 'bg-white text-secondary-700 border-secondary-300 hover:bg-secondary-50'
-                      }`}
-                    >
-                      Frecuencia
-                    </button>
-                  </div>
-                </div>
-                {chartTab === 'price' ? (
-                  productStats && productStats.priceHistory.length >= 2 ? (
-                    <PriceHistoryChart points={productStats.priceHistory} />
-                  ) : (
-                    <p className="text-sm text-secondary-500">No hay suficientes datos para la gráfica de precios.</p>
-                  )
-                ) : (
-                  productStats && productStats.priceHistory.length >= 1 ? (
-                    <PurchaseFrequencyChart points={productStats.priceHistory} />
-                  ) : (
-                    <p className="text-sm text-secondary-500">No hay suficientes datos para la frecuencia.</p>
-                  )
-                )}
-              </div>
-
-              <div className="flex gap-3">
-                <button
-                  onClick={() => {
-                    closeDetailsModal()
-                    openEditModal(selectedProduct)
-                  }}
-                  className="flex-1 px-4 py-2 bg-primary-600 text-white rounded-lg hover:bg-primary-700 transition-colors"
-                >
-                  Editar
-                </button>
-                <button
-                  onClick={async () => {
-                    setCurrentProduct(selectedProduct)
-                    await handleDeleteProduct()
-                    closeDetailsModal()
-                  }}
-                  className="flex-1 px-4 py-2 bg-red-600 text-white rounded-lg hover:bg-red-700 transition-colors"
-                >
-                  Eliminar
-                </button>
-              </div>
-            </div>
-          </div>
-        </div>
-      )}
+      <ProductDetailsModal
+        isOpen={showDetailsModal}
+        product={selectedProduct}
+        stats={productStats}
+        loading={loadingStats}
+        onClose={closeDetailsModal}
+        onEdit={selectedProduct ? () => {
+          closeDetailsModal()
+          openEditModal(selectedProduct)
+        } : undefined}
+        onDelete={selectedProduct ? async () => {
+          setCurrentProduct(selectedProduct)
+          await handleDeleteProduct()
+          closeDetailsModal()
+        } : undefined}
+      />
 
       {/* Edit Modal */}
       {/* Unified Product Modal */}
@@ -881,110 +732,3 @@ export default function ProductsPage() {
   )
 }
 
-function PriceHistoryChart({ points }: { points: ProductPricePoint[] }) {
-  if (points.length < 2) return null
-  const width = 760
-  const height = 280
-  const padding = 36
-  const prices = points.map(p => p.price)
-  const min = Math.min(...prices)
-  const max = Math.max(...prices)
-  const range = max - min || 1
-  const average = prices.reduce((a, b) => a + b, 0) / prices.length
-
-  const xStep = (width - padding * 2) / (points.length - 1)
-  const toX = (i: number) => padding + i * xStep
-  const toY = (price: number) => height - padding - ((price - min) / range) * (height - padding * 2)
-
-  const path = points.map((p, i) => `${i === 0 ? 'M' : 'L'} ${toX(i)} ${toY(p.price)}`).join(' ')
-  const avgY = toY(average)
-
-  const labelIndices = [0, Math.floor(points.length / 2), points.length - 1]
-    .filter((v, i, a) => a.indexOf(v) === i)
-
-  return (
-    <svg viewBox={`0 0 ${width} ${height}`} className="w-full h-64">
-      <rect x="0" y="0" width={width} height={height} fill="#f8fafc" rx="12" />
-      <line x1={padding} y1={avgY} x2={width - padding} y2={avgY} stroke="#94a3b8" strokeWidth="2" strokeDasharray="6 6" />
-      <path d={path} fill="none" stroke="#0f766e" strokeWidth="2" />
-      {points.map((p, i) => (
-        <circle key={`${p.date}-${i}`} cx={toX(i)} cy={toY(p.price)} r="3" fill="#0f766e" />
-      ))}
-      <text x={padding} y={height - 12} fontSize="18" fill="#64748b">{formatCurrency(min)}</text>
-      <text x={padding} y={22} fontSize="18" fill="#64748b">{formatCurrency(max)}</text>
-      <text x={width - padding} y={avgY - 6} fontSize="16" fill="#64748b" textAnchor="end">
-        Media {formatCurrency(average)}
-      </text>
-      {labelIndices.map((i) => (
-        <text
-          key={`x-label-${i}`}
-          x={toX(i)}
-          y={height - 6}
-          fontSize="18"
-          fill="#94a3b8"
-          textAnchor="middle"
-        >
-          {formatMonthYear(points[i].date)}
-        </text>
-      ))}
-    </svg>
-  )
-}
-
-function PurchaseFrequencyChart({ points }: { points: ProductPricePoint[] }) {
-  if (points.length < 1) return null
-  const width = 760
-  const height = 280
-  const padding = 36
-
-  const buckets = new Map<string, number>()
-  for (const p of points) {
-    const d = new Date(p.date)
-    const key = `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}`
-    buckets.set(key, (buckets.get(key) || 0) + 1)
-  }
-
-  const keys = Array.from(buckets.keys()).sort()
-  const values = keys.map(k => buckets.get(k) || 0)
-  const max = Math.max(...values, 1)
-
-  const barWidth = (width - padding * 2) / Math.max(keys.length, 1)
-  const chartHeight = height - padding * 2
-
-  const labelIndices = [0, Math.floor(keys.length / 2), keys.length - 1]
-    .filter((v, i, a) => a.indexOf(v) === i && v >= 0)
-
-  return (
-    <svg viewBox={`0 0 ${width} ${height}`} className="w-full h-64">
-      <rect x="0" y="0" width={width} height={height} fill="#f8fafc" rx="12" />
-      {values.map((v, i) => {
-        const h = (v / max) * chartHeight
-        const x = padding + i * barWidth + barWidth * 0.15
-        const y = height - padding - h
-        const w = barWidth * 0.7
-        return <rect key={`bar-${i}`} x={x} y={y} width={w} height={h} fill="#0f766e" rx="4" />
-      })}
-      <text x={padding} y={22} fontSize="18" fill="#64748b">{max} compras</text>
-      {labelIndices.map((i) => (
-        <text
-          key={`x-label-${i}`}
-          x={padding + i * barWidth + barWidth / 2}
-          y={height - 6}
-          fontSize="18"
-          fill="#94a3b8"
-          textAnchor="middle"
-        >
-          {formatMonthYear(`${keys[i]}-01`)}
-        </text>
-      ))}
-    </svg>
-  )
-}
-
-function formatMonthYear(dateStr: string) {
-  try {
-    return new Intl.DateTimeFormat('es-ES', { month: 'short', year: '2-digit' }).format(new Date(dateStr))
-  } catch {
-    return ''
-  }
-}

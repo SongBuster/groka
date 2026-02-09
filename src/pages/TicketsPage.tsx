@@ -2,17 +2,21 @@ import { useState, useEffect, useMemo } from 'react'
 import { useAuthStore } from '../stores/authStore'
 import { Loader2, Receipt, Plus, Trash2, Save, X, Filter, ChevronDown, RefreshCcw } from 'lucide-react'
 import ticketService from '../services/ticketService'
+import productService, { type ProductStatsDetail, type ProductWithCategory } from '../services/productService'
 import supermarketService from '../services/supermarketService'
 import { formatCurrency, formatDateTime } from '../lib/formatters'
 import { useDialog } from '../hooks/useDialog'
 import CustomSelect from '../components/CustomSelect'
 import { notifyProductsUpdated } from '../hooks/useProductsCount'
 import { handleSupabaseError } from '../lib/sessionManager'
+import ProductDetailsModal from '../components/ProductDetailsModal'
 import type { Database } from '../types/database'
 
 type Supermarket = Database['public']['Tables']['supermarkets']['Row']
 
 type Ticket = Database['public']['Tables']['tickets']['Row']
+
+type TicketItem = Database['public']['Tables']['ticket_items']['Row']
 
 interface ManualProduct {
   id: string
@@ -33,6 +37,14 @@ export default function TicketsPage() {
   const [loadingTickets, setLoadingTickets] = useState(false)
   const [showManualModal, setShowManualModal] = useState(false)
   const [editingTicket, setEditingTicket] = useState<Ticket | null>(null)
+  const [showTicketPreview, setShowTicketPreview] = useState(false)
+  const [previewTicket, setPreviewTicket] = useState<Ticket | null>(null)
+  const [previewItems, setPreviewItems] = useState<TicketItem[]>([])
+  const [loadingPreview, setLoadingPreview] = useState(false)
+  const [showProductDetails, setShowProductDetails] = useState(false)
+  const [selectedProductDetails, setSelectedProductDetails] = useState<ProductWithCategory | null>(null)
+  const [productStats, setProductStats] = useState<ProductStatsDetail | null>(null)
+  const [loadingProductStats, setLoadingProductStats] = useState(false)
   const [manualTicket, setManualTicket] = useState({
     storeName: '',
     supermarketId: '',
@@ -505,48 +517,88 @@ export default function TicketsPage() {
     return manualTicket.products.reduce((sum, p) => sum + p.total, 0)
   }
 
-  const handleEditTicket = async (ticket: Ticket) => {
+  const startEditTicket = (ticket: Ticket, items: TicketItem[]) => {
+    const products: ManualProduct[] = items.map(item => ({
+      id: item.id,
+      productId: item.product_id,
+      name: item.name,
+      productType: 'unit', // Por ahora asumimos unidades
+      quantity: item.quantity,
+      unitPrice: item.unit_price || 0,
+      total: item.total_price,
+      showDropdown: false
+    }))
+
+    const purchaseDate = ticket.purchase_date
+      ? new Date(ticket.purchase_date).toISOString().slice(0, 16)
+      : new Date().toISOString().slice(0, 16)
+
+    setEditingTicket(ticket)
+    setManualTicket({
+      storeName: ticket.store_name || '',
+      supermarketId: ticket.supermarket_id || '',
+      ticketNumber: ticket.ticket_number || '',
+      purchaseDate,
+      products
+    })
+    setShowManualModal(true)
+  }
+
+  const handleOpenTicketPreview = async (ticket: Ticket) => {
     try {
-      setLoadingTickets(true)
-      // Cargar los items del ticket
+      setLoadingPreview(true)
+      setPreviewTicket(ticket)
+      setPreviewItems([])
+      setShowTicketPreview(true)
       const { items } = await ticketService.getTicketWithItems(ticket.id)
-      
-      // Convertir a formato ManualProduct
-      const products: ManualProduct[] = items.map(item => ({
-        id: item.id,
-        productId: item.product_id,
-        name: item.name,
-        productType: 'unit', // Por ahora asumimos unidades
-        quantity: item.quantity,
-        unitPrice: item.unit_price || 0,
-        total: item.total_price,
-        showDropdown: false
-      }))
-
-      // Convertir fecha a formato datetime-local
-      const purchaseDate = ticket.purchase_date 
-        ? new Date(ticket.purchase_date).toISOString().slice(0, 16)
-        : new Date().toISOString().slice(0, 16)
-
-      setEditingTicket(ticket)
-      setManualTicket({
-        storeName: ticket.store_name || '',
-        supermarketId: ticket.supermarket_id || '',
-        ticketNumber: ticket.ticket_number || '',
-        purchaseDate,
-        products
-      })
-      setShowManualModal(true)
+      setPreviewItems(items)
     } catch (error) {
-      console.error('Error loading ticket:', error)
+      console.error('Error loading ticket preview:', error)
+      handleClosePreview()
       alert({
         title: 'Error',
         message: 'No se pudo cargar el ticket. Inténtalo de nuevo.',
         type: 'error'
       })
     } finally {
-      setLoadingTickets(false)
+      setLoadingPreview(false)
     }
+  }
+
+  const handleClosePreview = () => {
+    setShowTicketPreview(false)
+    setPreviewTicket(null)
+    setPreviewItems([])
+  }
+
+  const handleOpenProductDetails = async (productId: string) => {
+    if (!user?.id) return
+    setShowProductDetails(true)
+    setSelectedProductDetails(null)
+    setProductStats(null)
+    setLoadingProductStats(true)
+    try {
+      const product = await productService.getById(productId, user.id)
+      setSelectedProductDetails(product)
+      const stats = await productService.getProductStats(productId, user.id)
+      setProductStats(stats)
+    } catch (error) {
+      console.error('Error loading product details:', error)
+      alert({
+        title: 'Error',
+        message: 'No se pudo cargar el producto. Inténtalo de nuevo.',
+        type: 'error'
+      })
+      setShowProductDetails(false)
+    } finally {
+      setLoadingProductStats(false)
+    }
+  }
+
+  const handleCloseProductDetails = () => {
+    setShowProductDetails(false)
+    setSelectedProductDetails(null)
+    setProductStats(null)
   }
 
   const handleDeleteTicket = async (ticketId: string, storeName: string | null) => {
@@ -913,7 +965,7 @@ export default function TicketsPage() {
               placeholder="0.00 €"
               value={filterMinAmount}
               onChange={(e) => setFilterMinAmount(e.target.value)}
-              className="w-full px-3 py-2 border border-secondary-300 rounded-lg focus:ring-2 focus:ring-primary-500 focus:border-transparent"
+              className="w-full px-3 py-2 border border-secondary-300 rounded-lg focus:ring-2 focus:ring-primary-500 focus:border-transparent bg-white text-secondary-900 placeholder:text-secondary-400"
             />
           </div>
 
@@ -928,7 +980,7 @@ export default function TicketsPage() {
               placeholder="0.00 €"
               value={filterMaxAmount}
               onChange={(e) => setFilterMaxAmount(e.target.value)}
-              className="w-full px-3 py-2 border border-secondary-300 rounded-lg focus:ring-2 focus:ring-primary-500 focus:border-transparent"
+              className="w-full px-3 py-2 border border-secondary-300 rounded-lg focus:ring-2 focus:ring-primary-500 focus:border-transparent bg-white text-secondary-900 placeholder:text-secondary-400"
             />
           </div>
         </div>
@@ -944,7 +996,7 @@ export default function TicketsPage() {
                 type="date"
                 value={customStartDate}
                 onChange={(e) => setCustomStartDate(e.target.value)}
-                className="w-full px-3 py-2 border border-secondary-300 rounded-lg focus:ring-2 focus:ring-primary-500 focus:border-transparent"
+                className="w-full px-3 py-2 border border-secondary-300 rounded-lg focus:ring-2 focus:ring-primary-500 focus:border-transparent bg-white text-secondary-900"
               />
             </div>
             <div>
@@ -955,7 +1007,7 @@ export default function TicketsPage() {
                 type="date"
                 value={customEndDate}
                 onChange={(e) => setCustomEndDate(e.target.value)}
-                className="w-full px-3 py-2 border border-secondary-300 rounded-lg focus:ring-2 focus:ring-primary-500 focus:border-transparent"
+                className="w-full px-3 py-2 border border-secondary-300 rounded-lg focus:ring-2 focus:ring-primary-500 focus:border-transparent bg-white text-secondary-900"
               />
             </div>
           </div>
@@ -1028,7 +1080,7 @@ export default function TicketsPage() {
             {filteredTickets.map((ticket) => (
               <div
                 key={ticket.id}
-                onClick={() => handleEditTicket(ticket)}
+                onClick={() => handleOpenTicketPreview(ticket)}
                 className="bg-white p-5 sm:p-6 rounded-xl shadow-md border border-secondary-200 hover:shadow-xl hover:border-primary-400 transition-all duration-300 cursor-pointer group"
               >
                 <div className="flex flex-col gap-3">
@@ -1131,18 +1183,142 @@ export default function TicketsPage() {
         )}
       </div>
 
+      {/* Ticket Preview Modal */}
+      {showTicketPreview && previewTicket && (
+        <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50 p-4 overflow-y-auto">
+          <div className="bg-white rounded-2xl max-w-3xl w-full my-8 p-6 max-h-[90vh] overflow-y-auto">
+            <div className="flex justify-between items-center mb-4 sticky top-0 bg-white z-10 -mx-6 px-6 py-4 border-b border-secondary-200">
+              <h3 className="text-xl sm:text-2xl font-bold text-secondary-900">Detalles del ticket</h3>
+              <button
+                onClick={handleClosePreview}
+                aria-label="Cerrar"
+                className="p-2 text-secondary-700 hover:bg-secondary-100 rounded-lg transition-colors"
+              >
+                <X className="w-5 h-5" />
+              </button>
+            </div>
+
+            <div className="space-y-6">
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                <div className="bg-secondary-50 rounded-lg p-3 border border-secondary-200">
+                  <div className="text-xs text-secondary-500">Supermercado</div>
+                  <div className="text-sm font-semibold text-secondary-900">
+                    {previewTicket.supermarket_id
+                      ? (supermarkets.find(sm => sm.id === previewTicket.supermarket_id)?.name || '—')
+                      : '—'}
+                  </div>
+                </div>
+                <div className="bg-secondary-50 rounded-lg p-3 border border-secondary-200">
+                  <div className="text-xs text-secondary-500">Tienda</div>
+                  <div className="text-sm font-semibold text-secondary-900">
+                    {previewTicket.store_name || '—'}
+                  </div>
+                </div>
+                <div className="bg-secondary-50 rounded-lg p-3 border border-secondary-200">
+                  <div className="text-xs text-secondary-500">Fecha</div>
+                  <div className="text-sm font-semibold text-secondary-900">
+                    {formatDateTime(previewTicket.purchase_date)}
+                  </div>
+                </div>
+                <div className="bg-secondary-50 rounded-lg p-3 border border-secondary-200">
+                  <div className="text-xs text-secondary-500">Nº Ticket</div>
+                  <div className="text-sm font-semibold text-secondary-900">
+                    {previewTicket.ticket_number || '—'}
+                  </div>
+                </div>
+              </div>
+
+              <div className="bg-white border border-secondary-200 rounded-lg overflow-hidden">
+                <div className="px-4 py-2 bg-secondary-50 text-xs font-semibold text-secondary-600 uppercase tracking-wide flex items-center justify-between">
+                  <span>Productos</span>
+                  <span className="text-[11px] font-medium text-secondary-500">
+                    {previewItems.length} {previewItems.length === 1 ? 'producto' : 'productos'}
+                  </span>
+                </div>
+                <div className="px-4 py-3 flex items-center justify-between text-sm bg-white border-b border-secondary-100">
+                  <span className="text-secondary-600 font-medium">Total</span>
+                  <span className="text-secondary-900 font-semibold">
+                    {formatCurrency(previewTicket.total_amount || previewItems.reduce((sum, item) => sum + (item.total_price || 0), 0))}
+                  </span>
+                </div>
+                {loadingPreview ? (
+                  <div className="flex items-center justify-center py-10">
+                    <Loader2 className="w-5 h-5 animate-spin text-primary-600" />
+                  </div>
+                ) : previewItems.length === 0 ? (
+                  <div className="px-4 py-6 text-sm text-secondary-500">Sin productos.</div>
+                ) : (
+                  <div className="divide-y divide-secondary-100">
+                    {previewItems.map((item) => (
+                      <div
+                        key={item.id}
+                        role={item.product_id ? 'button' : undefined}
+                        onClick={() => {
+                          if (!item.product_id) return
+                          handleOpenProductDetails(item.product_id)
+                        }}
+                        className={`px-4 py-3 flex items-center justify-between text-sm ${item.product_id ? 'cursor-pointer hover:bg-secondary-50' : ''}`}
+                      >
+                        <div className="flex-1 min-w-0">
+                          <div className="font-medium text-secondary-900 truncate">{item.name}</div>
+                          <div className="text-xs text-secondary-500">
+                            {item.quantity} × {item.unit_price != null ? formatCurrency(item.unit_price) : '—'}
+                          </div>
+                        </div>
+                        <div className="text-secondary-900 font-semibold ml-4">
+                          {formatCurrency(item.total_price)}
+                        </div>
+                      </div>
+                    ))}
+                  </div>
+                )}
+              </div>
+
+              <div className="flex justify-between items-center p-4 bg-primary-50 rounded-lg border-2 border-primary-200">
+                <span className="text-lg font-semibold text-secondary-900">Total</span>
+                <span className="text-2xl font-bold text-primary-600">
+                  {formatCurrency(previewTicket.total_amount || previewItems.reduce((sum, item) => sum + (item.total_price || 0), 0))}
+                </span>
+              </div>
+            </div>
+
+            <div className="flex gap-3 mt-6 pt-6 border-t border-secondary-200">
+              <button
+                onClick={handleClosePreview}
+                className="flex-1 px-4 py-3 border border-secondary-300 text-secondary-700 rounded-lg hover:bg-secondary-50 transition-colors font-medium"
+              >
+                Cerrar
+              </button>
+              <button
+                onClick={() => {
+                  if (!previewTicket) return
+                  const items = [...previewItems]
+                  const ticket = previewTicket
+                  handleClosePreview()
+                  startEditTicket(ticket, items)
+                }}
+                className="flex-1 flex items-center justify-center gap-2 px-4 py-3 bg-primary-600 text-white rounded-lg hover:bg-primary-700 transition-colors font-medium"
+              >
+                Editar ticket
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
       {/* Manual Ticket Modal */}
       {showManualModal && (
         <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50 p-4 overflow-y-auto">
           <div className="bg-white rounded-2xl max-w-4xl w-full my-8 p-6 max-h-[90vh] overflow-y-auto">
-            <div className="flex justify-between items-center mb-6">
+            <div className="flex justify-between items-center mb-6 sticky top-0 bg-white z-10 -mx-6 px-6 py-4 border-b border-secondary-200">
               <h3 className="text-2xl font-bold text-secondary-900">
                 {editingTicket ? '✏️ Editar Ticket' : '✍️ Nuevo Ticket Manual'}
               </h3>
               <button
                 onClick={handleCloseModal}
                 disabled={savingTicket}
-                className="p-2 hover:bg-secondary-100 rounded-lg transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+                aria-label="Cerrar"
+                className="p-2 text-secondary-700 hover:bg-secondary-100 rounded-lg transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
               >
                 <X className="w-5 h-5" />
               </button>
@@ -1458,6 +1634,14 @@ export default function TicketsPage() {
           </div>
         </div>
       )}
+
+      <ProductDetailsModal
+        isOpen={showProductDetails}
+        product={selectedProductDetails}
+        stats={productStats}
+        loading={loadingProductStats}
+        onClose={handleCloseProductDetails}
+      />
 
       {/* Dialog Component */}
       <DialogComponent />

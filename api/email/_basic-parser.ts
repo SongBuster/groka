@@ -93,12 +93,12 @@ async function detectSupermarket(text: string): Promise<{ id: string | null; nam
 
 /**
  * Parse PDF buffer and extract basic ticket data
-    }
-    
-    // Detect supermarket
-    const supermarket = await detectSupermarket(fullText)
-    result.store = supermarket.name
-    result.supermarketId = supermarket.id
+ */
+export async function parseBasicTicket(pdfBuffer: Buffer): Promise<BasicTicketData> {
+  try {
+    const data = await pdfParse(pdfBuffer)
+    const fullText = data.text || ''
+
     const result: BasicTicketData = {
       date: null,
       time: null,
@@ -107,12 +107,12 @@ async function detectSupermarket(text: string): Promise<{ id: string | null; nam
       invoiceNumber: null,
       supermarketId: null
     }
-    
+
     // Detect supermarket
-    const supermarket = detectSupermarket(fullText)
+    const supermarket = await detectSupermarket(fullText)
     result.store = supermarket.name
     result.supermarketId = supermarket.id
-    
+
     // Extract date and time: DD/MM/YYYY HH:MM or DD-MM-YYYY HH:MM
     const dateTimeMatch = fullText.match(/(\d{1,2}[/-]\d{1,2}[/-]\d{2,4})\s+(\d{1,2}:\d{2})/)
     if (dateTimeMatch) {
@@ -125,7 +125,7 @@ async function detectSupermarket(text: string): Promise<{ id: string | null; nam
         result.date = convertToISODate(dateMatch[1])
       }
     }
-    
+
     // Extract store location for Mercadona
     if (supermarket.name === 'MERCADONA') {
       const storeMatch = fullText.match(/MERCADONA,?\s*S\.?\s*A\.?[^\n]*\n([^\n]+)\n([^\n]+)/i)
@@ -135,7 +135,7 @@ async function detectSupermarket(text: string): Promise<{ id: string | null; nam
         result.store = `MERCADONA — ${line1} — ${line2}`
       }
     }
-    
+
     // Extract total amount
     const totalPattern = new RegExp(`TOTAL\\s*\\(?\\s*€?\\s*\\)?\\s*:?\\s*(${DEC})`, 'i')
     const totalMatch = fullText.match(totalPattern)
@@ -149,13 +149,13 @@ async function detectSupermarket(text: string): Promise<{ id: string | null; nam
         result.total = normNum(importeMatch[1])
       }
     }
-    
+
     // Extract invoice number
     const invoiceMatch = fullText.match(/FACTURA\s+SIMPLIFICADA[:\s]*([A-Z0-9-]+)/i)
     if (invoiceMatch) {
       result.invoiceNumber = invoiceMatch[1].trim()
     }
-    
+
     return result
   } catch (error) {
     console.error('Error parsing PDF:', error)

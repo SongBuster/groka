@@ -276,9 +276,18 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
   }
 
   try {
+    console.log('[gmail-poller] start')
+    console.log('[gmail-poller] supabase url configured:', Boolean(supabaseUrl))
+    console.log('[gmail-poller] gmail tokens configured:', {
+      access: Boolean(process.env.GMAIL_ACCESS_TOKEN),
+      refresh: Boolean(process.env.GMAIL_REFRESH_TOKEN),
+      clientId: Boolean(process.env.GMAIL_CLIENT_ID),
+      clientSecret: Boolean(process.env.GMAIL_CLIENT_SECRET)
+    })
+
     // 1. Get unread messages
     const messages = await gmail.getUnreadMessages(50)
-    console.log(`Found ${messages.length} unread messages`)
+    console.log(`[gmail-poller] unread messages: ${messages.length}`)
 
     if (messages.length === 0) {
       return res.status(200).json({ message: 'No new emails', result })
@@ -288,7 +297,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
     for (const message of messages) {
       try {
         const details = await gmail.getMessageDetails(message.id)
-        console.log(`Processing email from: ${details.from}`)
+        console.log(`[gmail-poller] processing email from: ${details.from} | subject: ${details.subject || '—'}`)
 
         // 3. Check if sender is a registered user in Supabase Auth
         const admin = supabase.auth.admin
@@ -319,7 +328,13 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
         }
 
         // 4. Get PDF attachments
-        const pdfAttachments = details.attachments.filter((att) => att.mimeType === 'application/pdf')
+        const pdfAttachments = details.attachments.filter((att) => {
+          if (att.mimeType === 'application/pdf') return true
+          if ((att.filename || '').toLowerCase().endsWith('.pdf')) return true
+          return false
+        })
+
+        console.log(`[gmail-poller] attachments: ${details.attachments.length} | pdfs: ${pdfAttachments.length}`)
 
         if (pdfAttachments.length === 0) {
           console.log(`No PDF attachments found in email from ${details.from}`)
@@ -331,7 +346,11 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
             <p>Por favor, reenvía el email con el ticket en formato PDF adjunto.</p>
             `
           )
-          await gmail.markAsRead(message.id)
+          try {
+            await gmail.markAsRead(message.id)
+          } catch (markError: any) {
+            console.error('[gmail-poller] failed to mark as read:', markError?.message || markError)
+          }
           continue
         }
 
@@ -470,7 +489,11 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
         }
 
         // 7. Mark as read
-        await gmail.markAsRead(message.id)
+        try {
+          await gmail.markAsRead(message.id)
+        } catch (markError: any) {
+          console.error('[gmail-poller] failed to mark as read:', markError?.message || markError)
+        }
         result.processedCount++
       } catch (error: any) {
         console.error(`Error processing message ${message.id}:`, error)
