@@ -1,9 +1,10 @@
 import { useState, useEffect, useMemo } from 'react'
 import { useAuthStore } from '../stores/authStore'
-import { Loader2, Receipt, Plus, Trash2, Save, X, Filter, ChevronDown, RefreshCcw } from 'lucide-react'
+import { Loader2, Receipt, Plus, Trash2, Save, X, Filter, ChevronDown, RefreshCcw, Mail } from 'lucide-react'
 import ticketService from '../services/ticketService'
 import productService, { type ProductStatsDetail, type ProductWithCategory } from '../services/productService'
 import supermarketService from '../services/supermarketService'
+import { supabase } from '../lib/supabase'
 import { formatCurrency, formatDateTime } from '../lib/formatters'
 import { useDialog } from '../hooks/useDialog'
 import CustomSelect from '../components/CustomSelect'
@@ -59,6 +60,8 @@ export default function TicketsPage() {
   const [showStoreDropdown, setShowStoreDropdown] = useState(false)
   const [isDragging, setIsDragging] = useState(false)
   const [retryingTicketId, setRetryingTicketId] = useState<string | null>(null)
+  const [triggeringPoller, setTriggeringPoller] = useState(false)
+  const [showAddOptions, setShowAddOptions] = useState(false)
 
   // Estados de filtros
   const [showFilters, setShowFilters] = useState(false)
@@ -601,6 +604,62 @@ export default function TicketsPage() {
     setProductStats(null)
   }
 
+  const handleTriggerEmailPoller = async () => {
+    if (!user) return
+    try {
+      setTriggeringPoller(true)
+      const { data } = await supabase.auth.getSession()
+      const token = data.session?.access_token
+      if (!token) {
+        alert({
+          title: 'Sesión no válida',
+          message: 'Vuelve a iniciar sesión para continuar.',
+          type: 'error'
+        })
+        return
+      }
+
+      const baseUrl = (import.meta as any).env?.VITE_GMAIL_POLLER_URL || ''
+      const endpoint = `${baseUrl}/api/email/gmail-poller-trigger`
+      const response = await fetch(endpoint, {
+        method: 'POST',
+        headers: {
+          Authorization: `Bearer ${token}`
+        }
+      })
+
+      const text = await response.text()
+      let payload: any
+      try {
+        payload = JSON.parse(text)
+      } catch {
+        payload = text
+      }
+
+      if (!response.ok) {
+        if (response.status === 404) {
+          throw new Error('No disponible en desarrollo. Usa el deploy de Vercel o configura VITE_GMAIL_POLLER_URL.')
+        }
+        throw new Error(typeof payload === 'string' ? payload : (payload?.error ? JSON.stringify(payload.error) : 'Error'))
+      }
+
+      await alert({
+        title: 'Procesado',
+        message: 'Se ha lanzado el procesado de emails. Revisa los tickets en unos segundos.',
+        type: 'success'
+      })
+      await loadTickets()
+    } catch (error: any) {
+      await alert({
+        title: 'Error',
+        message: error?.message || 'No se pudo lanzar el procesado de emails.',
+        type: 'error'
+      })
+    } finally {
+      setTriggeringPoller(false)
+    }
+  }
+
   const handleDeleteTicket = async (ticketId: string, storeName: string | null) => {
     const confirmed = await confirm({
       title: 'Eliminar ticket',
@@ -845,29 +904,56 @@ export default function TicketsPage() {
             onChange={handleUploadPDF}
             className="hidden"
           />
-          <button 
-            onClick={() => document.getElementById('pdf-upload')?.click()}
-            disabled={uploadingPDF}
-            className="px-6 py-3 bg-white text-secondary-700 border border-secondary-300 rounded-lg hover:bg-secondary-50 transition-colors font-medium disabled:opacity-50 disabled:cursor-not-allowed flex items-center gap-2"
-          >
-            {uploadingPDF ? (
-              <>
-                <Loader2 className="w-5 h-5 animate-spin text-primary-600" />
-                Procesando...
-              </>
-            ) : (
-              <>
-                📄 Subir PDF
-                <span className="hidden sm:inline text-xs text-secondary-500 ml-1">o arrastra aquí</span>
-              </>
-            )}
-          </button>
-          <button 
-            onClick={() => setShowManualModal(true)}
-            className="px-6 py-3 bg-white text-secondary-700 border border-secondary-300 rounded-lg hover:bg-secondary-50 transition-colors font-medium"
-          >
-            ✍️ Entrada manual
-          </button>
+          <div className="hidden sm:flex flex-wrap gap-3">
+            <button 
+              onClick={() => document.getElementById('pdf-upload')?.click()}
+              disabled={uploadingPDF}
+              className="px-6 py-3 bg-white text-secondary-700 border border-secondary-300 rounded-lg hover:bg-secondary-50 transition-colors font-medium disabled:opacity-50 disabled:cursor-not-allowed flex items-center gap-2"
+            >
+              {uploadingPDF ? (
+                <>
+                  <Loader2 className="w-5 h-5 animate-spin text-primary-600" />
+                  Procesando...
+                </>
+              ) : (
+                <>
+                  📄 Subir PDF
+                  <span className="hidden sm:inline text-xs text-secondary-500 ml-1">o arrastra aquí</span>
+                </>
+              )}
+            </button>
+            <button 
+              onClick={() => setShowManualModal(true)}
+              className="px-6 py-3 bg-white text-secondary-700 border border-secondary-300 rounded-lg hover:bg-secondary-50 transition-colors font-medium"
+            >
+              ✍️ Entrada manual
+            </button>
+            <button
+              onClick={handleTriggerEmailPoller}
+              disabled={triggeringPoller}
+              className="px-6 py-3 bg-white text-secondary-700 border border-secondary-300 rounded-lg hover:bg-secondary-50 transition-colors font-medium disabled:opacity-50 disabled:cursor-not-allowed flex items-center gap-2"
+            >
+              {triggeringPoller ? (
+                <>
+                  <Loader2 className="w-5 h-5 animate-spin text-primary-600" />
+                  Revisando correo...
+                </>
+              ) : (
+                <>
+                  <Mail className="w-5 h-5" />
+                  Revisar correo
+                </>
+              )}
+            </button>
+          </div>
+          <div className="sm:hidden">
+            <button
+              onClick={() => setShowAddOptions(true)}
+              className="w-full px-6 py-3 bg-primary-600 text-white rounded-lg hover:bg-primary-700 transition-colors font-medium"
+            >
+              ➕ Añadir ticket
+            </button>
+          </div>
         </div>
       </div>
 
@@ -1642,6 +1728,63 @@ export default function TicketsPage() {
         loading={loadingProductStats}
         onClose={handleCloseProductDetails}
       />
+
+      {showAddOptions && (
+        <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50 p-4">
+          <div className="bg-white rounded-2xl w-full max-w-sm p-6">
+            <div className="flex items-center justify-between mb-4">
+              <h3 className="text-lg font-semibold text-secondary-900">Añadir ticket</h3>
+              <button
+                onClick={() => setShowAddOptions(false)}
+                className="p-2 rounded-lg hover:bg-secondary-100"
+                aria-label="Cerrar"
+              >
+                <X className="w-5 h-5 text-secondary-600" />
+              </button>
+            </div>
+            <div className="space-y-3">
+              <button
+                onClick={() => {
+                  setShowAddOptions(false)
+                  document.getElementById('pdf-upload')?.click()
+                }}
+                className="w-full px-4 py-3 bg-white text-secondary-700 border border-secondary-300 rounded-lg hover:bg-secondary-50 transition-colors font-medium"
+              >
+                📄 Subir PDF
+              </button>
+              <button
+                onClick={() => {
+                  setShowAddOptions(false)
+                  setShowManualModal(true)
+                }}
+                className="w-full px-4 py-3 bg-white text-secondary-700 border border-secondary-300 rounded-lg hover:bg-secondary-50 transition-colors font-medium"
+              >
+                ✍️ Entrada manual
+              </button>
+              <button
+                onClick={async () => {
+                  setShowAddOptions(false)
+                  await handleTriggerEmailPoller()
+                }}
+                disabled={triggeringPoller}
+                className="w-full px-4 py-3 bg-white text-secondary-700 border border-secondary-300 rounded-lg hover:bg-secondary-50 transition-colors font-medium disabled:opacity-50 disabled:cursor-not-allowed flex items-center justify-center gap-2"
+              >
+                {triggeringPoller ? (
+                  <>
+                    <Loader2 className="w-5 h-5 animate-spin text-primary-600" />
+                    Revisando correo...
+                  </>
+                ) : (
+                  <>
+                    <Mail className="w-5 h-5" />
+                    Revisar correo
+                  </>
+                )}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
 
       {/* Dialog Component */}
       <DialogComponent />

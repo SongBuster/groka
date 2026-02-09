@@ -423,6 +423,40 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
               purchaseDateTime = `${purchaseDateTime}T${basicInfo.time}:00`
             }
 
+            // Prevent duplicates: same user + supermarket (or store) + purchase datetime
+            if (purchaseDateTime) {
+              let duplicateQuery = supabase
+                .from('tickets')
+                .select('id')
+                .eq('user_id', authUser.id)
+                .eq('purchase_date', purchaseDateTime)
+
+              if (basicInfo?.supermarketId) {
+                duplicateQuery = duplicateQuery.eq('supermarket_id', basicInfo.supermarketId)
+              } else if (basicInfo?.store) {
+                duplicateQuery = duplicateQuery.ilike('store_name', basicInfo.store)
+              }
+
+              const { data: dup, error: dupErr } = await duplicateQuery.limit(1).maybeSingle()
+              if (dupErr) {
+                console.warn('Duplicate check error:', dupErr)
+              }
+              if (dup) {
+                const dupMsg = `Ticket duplicado detectado (${attachment.filename}).`
+                console.log(dupMsg)
+                await gmail.sendEmail(
+                  details.from,
+                  'ℹ️ Groka - Ticket duplicado',
+                  `
+                  <h2>Ticket ya existente</h2>
+                  <p>El ticket <strong>${attachment.filename}</strong> ya existe en tu cuenta con la misma fecha/hora y supermercado.</p>
+                  <p>Si necesitas volver a subirlo, hazlo manualmente desde la app.</p>
+                  `
+                )
+                continue
+              }
+            }
+
             // Save ticket to DB - always mark as parsed=false for full client-side parse
             const { data: ticket, error: ticketError } = await supabase
               .from('tickets')
