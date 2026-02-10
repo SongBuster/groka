@@ -318,6 +318,51 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
             details.from,
             'Groka - Usuario no registrado',
             `
+<body style="margin:0;padding:0;background:#f5f7fb;font-family:Segoe UI,Helvetica,Arial,sans-serif;color:#0f172a;">
+  <table role="presentation" width="100%" cellpadding="0" cellspacing="0" style="background:#f5f7fb;padding:24px 0;">
+    <tr>
+      <td align="center">
+        <table role="presentation" width="560" cellpadding="0" cellspacing="0" style="background:#ffffff;border-radius:16px;overflow:hidden;box-shadow:0 10px 30px rgba(15,23,42,0.1);">
+          <tr>
+            <td style="padding:24px 24px 12px 24px; text-align:left; border-bottom:1px solid #e2e8f0;">
+              <table role="presentation" width="100%" cellpadding="0" cellspacing="0">
+                <tr>
+                  <td style="vertical-align:middle;">
+                    <img src="https://groka.vercel.app/icons/icon-192x192.png" alt="Groka" width="48" height="48" style="border-radius:12px; display:block;" />
+                  </td>
+                  <td style="vertical-align:middle; padding-left:12px;">
+                    <div style="font-size:18px;font-weight:700;color:#0f172a;line-height:1.2;">Groka</div>
+                    <div style="font-size:12px;color:#64748b;">Tu lista de compra inteligente</div>
+                  </td>
+                  <td style="text-align:right; vertical-align:middle;">
+                    <span style="display:inline-block;padding:6px 10px;border-radius:999px;background:#eef2ff;color:#4338ca;font-size:12px;font-weight:600;">Usuario</span>
+                  </td>
+                </tr>
+              </table>
+            </td>
+          </tr>
+
+          <tr>
+            <td style="padding:28px 24px 8px 24px; text-align:left;">
+              <div style="font-size:22px;font-weight:700;color:#0f172a;margin:0 0 8px 0;">No pudimos procesar tu ticket</div>
+              <div style="font-size:14px;line-height:1.6;color:#475569;margin:0;">
+                <p>El email <strong>${details.from}</strong> no está registrado en Groka.</p>
+                <p>Por favor, regístrate en <a href="https://groka.vercel.app">groka.app</a> primero.</p>
+                </div>
+            </td>
+          </tr>
+        </table>
+
+        <div style="font-size:11px;color:#94a3b8;margin-top:12px;">
+          ©  https://groka.vercel.app  • Groka
+        </div>
+      </td>
+    </tr>
+  </table>
+</body>
+
+
+
             <h2>No pudimos procesar tu ticket</h2>
             <p>El email <strong>${details.from}</strong> no está registrado en Groka.</p>
             <p>Por favor, regístrate en <a href="https://groka.app">groka.app</a> primero.</p>
@@ -342,9 +387,47 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
             details.from,
             'Groka - Sin archivos PDF',
             `
-            <h2>No encontramos PDFs adjuntos</h2>
-            <p>Por favor, reenvía el email con el ticket en formato PDF adjunto.</p>
-            `
+<body style="margin:0;padding:0;background:#f5f7fb;font-family:Segoe UI,Helvetica,Arial,sans-serif;color:#0f172a;">
+  <table role="presentation" width="100%" cellpadding="0" cellspacing="0" style="background:#f5f7fb;padding:24px 0;">
+    <tr>
+      <td align="center">
+        <table role="presentation" width="560" cellpadding="0" cellspacing="0" style="background:#ffffff;border-radius:16px;overflow:hidden;box-shadow:0 10px 30px rgba(15,23,42,0.1);">
+          <tr>
+            <td style="padding:24px 24px 12px 24px; text-align:left; border-bottom:1px solid #e2e8f0;">
+              <table role="presentation" width="100%" cellpadding="0" cellspacing="0">
+                <tr>
+                  <td style="vertical-align:middle;">
+                    <img src="https://groka.vercel.app/icons/icon-192x192.png" alt="Groka" width="48" height="48" style="border-radius:12px; display:block;" />
+                  </td>
+                  <td style="vertical-align:middle; padding-left:12px;">
+                    <div style="font-size:18px;font-weight:700;color:#0f172a;line-height:1.2;">Groka</div>
+                    <div style="font-size:12px;color:#64748b;">Tu lista de compra inteligente</div>
+                  </td>
+                  <td style="text-align:right; vertical-align:middle;">
+                    <span style="display:inline-block;padding:6px 10px;border-radius:999px;background:#eef2ff;color:#4338ca;font-size:12px;font-weight:600;">Sin adjunto</span>
+                  </td>
+                </tr>
+              </table>
+            </td>
+          </tr>
+
+          <tr>
+            <td style="padding:28px 24px 8px 24px; text-align:left;">
+              <div style="font-size:22px;font-weight:700;color:#0f172a;margin:0 0 8px 0;">No encontramos PDFs adjuntos</div>
+              <div style="font-size:14px;line-height:1.6;color:#475569;margin:0;">
+                <p>Por favor, reenvía el email con el ticket en formato PDF adjunto.</p>
+                </div>
+            </td>
+          </tr>
+        </table>
+
+        <div style="font-size:11px;color:#94a3b8;margin-top:12px;">
+          ©  https://groka.vercel.app  • Groka
+        </div>
+      </td>
+    </tr>
+  </table>
+</body>`
           )
           try {
             await gmail.markAsRead(message.id)
@@ -448,9 +531,48 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
                   details.from,
                   'Groka - Ticket duplicado',
                   `
-                  <h2>Ticket ya existente</h2>
-                  <p>El ticket <strong>${attachment.filename}</strong> ya existe en tu cuenta con la misma fecha/hora y supermercado.</p>
+<body style="margin:0;padding:0;background:#f5f7fb;font-family:Segoe UI,Helvetica,Arial,sans-serif;color:#0f172a;">
+  <table role="presentation" width="100%" cellpadding="0" cellspacing="0" style="background:#f5f7fb;padding:24px 0;">
+    <tr>
+      <td align="center">
+        <table role="presentation" width="560" cellpadding="0" cellspacing="0" style="background:#ffffff;border-radius:16px;overflow:hidden;box-shadow:0 10px 30px rgba(15,23,42,0.1);">
+          <tr>
+            <td style="padding:24px 24px 12px 24px; text-align:left; border-bottom:1px solid #e2e8f0;">
+              <table role="presentation" width="100%" cellpadding="0" cellspacing="0">
+                <tr>
+                  <td style="vertical-align:middle;">
+                    <img src="https://groka.vercel.app/icons/icon-192x192.png" alt="Groka" width="48" height="48" style="border-radius:12px; display:block;" />
+                  </td>
+                  <td style="vertical-align:middle; padding-left:12px;">
+                    <div style="font-size:18px;font-weight:700;color:#0f172a;line-height:1.2;">Groka</div>
+                    <div style="font-size:12px;color:#64748b;">Tu lista de compra inteligente</div>
+                  </td>
+                  <td style="text-align:right; vertical-align:middle;">
+                    <span style="display:inline-block;padding:6px 10px;border-radius:999px;background:#eef2ff;color:#4338ca;font-size:12px;font-weight:600;">Ticket duplicado</span>
+                  </td>
+                </tr>
+              </table>
+            </td>
+          </tr>
+
+          <tr>
+            <td style="padding:28px 24px 8px 24px; text-align:left;">
+              <div style="font-size:22px;font-weight:700;color:#0f172a;margin:0 0 8px 0;">Ticket ya existente</div>
+              <div style="font-size:14px;line-height:1.6;color:#475569;margin:0;">
+                <p>El ticket <strong>${attachment.filename}</strong> ya existe en tu cuenta con la misma fecha/hora y supermercado.</p>
                   <p>Si necesitas volver a subirlo, hazlo manualmente desde la app.</p>
+              </div>
+            </td>
+          </tr>
+        </table>
+
+        <div style="font-size:11px;color:#94a3b8;margin-top:12px;">
+          ©  https://groka.vercel.app  • Groka
+        </div>
+      </td>
+    </tr>
+  </table>
+</body>
                   `
                 )
                 continue
@@ -519,7 +641,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
                     <div style="font-size:12px;color:#64748b;">Tu lista de compra inteligente</div>
                   </td>
                   <td style="text-align:right; vertical-align:middle;">
-                    <span style="display:inline-block;padding:6px 10px;border-radius:999px;background:#eef2ff;color:#4338ca;font-size:12px;font-weight:600;">Verificación</span>
+                    <span style="display:inline-block;padding:6px 10px;border-radius:999px;background:#eef2ff;color:#4338ca;font-size:12px;font-weight:600;">Tickets recibidos</span>
                   </td>
                 </tr>
               </table>
@@ -540,7 +662,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
         </table>
 
         <div style="font-size:11px;color:#94a3b8;margin-top:12px;">
-          © {{ .SiteURL }} • Groka
+          ©  https://groka.vercel.app  • Groka
         </div>
       </td>
     </tr>
@@ -553,10 +675,49 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
             details.from,
             'Groka - Error al procesar tickets',
             `
-            <h2>No pudimos procesar tus tickets</h2>
-            <p>Ocurrieron los siguientes errores:</p>
-            <ul>${errors.map((e) => `<li>${e}</li>`).join('')}</ul>
-            <p>Por favor, verifica que los PDFs sean tickets válidos.</p>
+            <body style="margin:0;padding:0;background:#f5f7fb;font-family:Segoe UI,Helvetica,Arial,sans-serif;color:#0f172a;">
+  <table role="presentation" width="100%" cellpadding="0" cellspacing="0" style="background:#f5f7fb;padding:24px 0;">
+    <tr>
+      <td align="center">
+        <table role="presentation" width="560" cellpadding="0" cellspacing="0" style="background:#ffffff;border-radius:16px;overflow:hidden;box-shadow:0 10px 30px rgba(15,23,42,0.1);">
+          <tr>
+            <td style="padding:24px 24px 12px 24px; text-align:left; border-bottom:1px solid #e2e8f0;">
+              <table role="presentation" width="100%" cellpadding="0" cellspacing="0">
+                <tr>
+                  <td style="vertical-align:middle;">
+                    <img src="https://groka.vercel.app/icons/icon-192x192.png" alt="Groka" width="48" height="48" style="border-radius:12px; display:block;" />
+                  </td>
+                  <td style="vertical-align:middle; padding-left:12px;">
+                    <div style="font-size:18px;font-weight:700;color:#0f172a;line-height:1.2;">Groka</div>
+                    <div style="font-size:12px;color:#64748b;">Tu lista de compra inteligente</div>
+                  </td>
+                  <td style="text-align:right; vertical-align:middle;">
+                    <span style="display:inline-block;padding:6px 10px;border-radius:999px;background:#eef2ff;color:#4338ca;font-size:12px;font-weight:600;">Error</span>
+                  </td>
+                </tr>
+              </table>
+            </td>
+          </tr>
+
+          <tr>
+            <td style="padding:28px 24px 8px 24px; text-align:left;">
+              <div style="font-size:22px;font-weight:700;color:#0f172a;margin:0 0 8px 0;">No pudimos procesar tus tickets</div>
+              <div style="font-size:14px;line-height:1.6;color:#475569;margin:0;">
+                  <p>Ocurrieron los siguientes errores:</p>
+                  <ul>${errors.map((e) => `<li>${e}</li>`).join('')}</ul>
+                  <p>Por favor, verifica que los PDFs sean tickets válidos.</p>
+              </div>
+            </td>
+          </tr>
+        </table>
+
+        <div style="font-size:11px;color:#94a3b8;margin-top:12px;">
+          ©  https://groka.vercel.app  • Groka
+        </div>
+      </td>
+    </tr>
+  </table>
+</body>
             `
           )
         }
