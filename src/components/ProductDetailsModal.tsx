@@ -205,6 +205,8 @@ function PriceHistoryChart({ points }: { points: ProductPricePoint[] }) {
   const stepX = points.length > 1 ? (width - padding * 2) / (points.length - 1) : 0
 
   const avg = points.reduce((sum, p) => sum + p.price, 0) / Math.max(points.length, 1)
+  const labelIndices = [0, Math.floor(points.length / 2), points.length - 1]
+    .filter((v, i, a) => a.indexOf(v) === i && v >= 0)
 
   return (
     <svg viewBox={`0 0 ${width} ${height}`} className="w-full h-48">
@@ -242,6 +244,27 @@ function PriceHistoryChart({ points }: { points: ProductPricePoint[] }) {
         strokeDasharray="4 4"
         fill="none"
       />
+      <text x={padding} y={height - 10} fontSize="12" fill="#64748b">
+        {formatCurrency(min)}
+      </text>
+      <text x={padding} y={22} fontSize="12" fill="#64748b">
+        {formatCurrency(max)}
+      </text>
+      <text x={width - padding} y={height - padding - ((avg - min) / range) * chartHeight - 6} fontSize="12" fill="#64748b" textAnchor="end">
+        Media {formatCurrency(avg)}
+      </text>
+      {labelIndices.map((i) => (
+        <text
+          key={`x-label-${i}`}
+          x={padding + i * stepX}
+          y={height - 6}
+          fontSize="12"
+          fill="#94a3b8"
+          textAnchor="middle"
+        >
+          {formatMonthYear(points[i].date)}
+        </text>
+      ))}
     </svg>
   )
 }
@@ -251,39 +274,62 @@ function PurchaseFrequencyChart({ points }: { points: ProductPricePoint[] }) {
   const height = 220
   const padding = 36
 
-  const buckets = new Map<number, number>()
-  for (let i = 1; i < points.length; i += 1) {
-    const prev = new Date(points[i - 1].date)
-    const curr = new Date(points[i].date)
-    const diffDays = Math.max(1, Math.round((curr.getTime() - prev.getTime()) / (1000 * 60 * 60 * 24)))
-    buckets.set(diffDays, (buckets.get(diffDays) || 0) + 1)
+  const buckets = new Map<string, number>()
+  for (const p of points) {
+    const d = new Date(p.date)
+    const key = `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}`
+    buckets.set(key, (buckets.get(key) || 0) + 1)
   }
 
-  const bucketEntries = Array.from(buckets.entries()).sort((a, b) => a[0] - b[0])
-  const max = Math.max(...bucketEntries.map(([, count]) => count), 1)
-  const barWidth = (width - padding * 2) / Math.max(bucketEntries.length, 1)
+  const keys = Array.from(buckets.keys()).sort()
+  const values = keys.map(k => buckets.get(k) || 0)
+  const max = Math.max(...values, 1)
+  const barWidth = (width - padding * 2) / Math.max(keys.length, 1)
   const chartHeight = height - padding * 2
 
   return (
     <svg viewBox={`0 0 ${width} ${height}`} className="w-full h-48">
       <rect x="0" y="0" width={width} height={height} fill="#f8fafc" rx="12" />
-      {bucketEntries.map(([days, count], i) => {
+      {values.map((count, i) => {
         const h = (count / max) * chartHeight
         const x = padding + i * barWidth + barWidth * 0.15
         const y = height - padding - h
         const w = barWidth * 0.7
         return (
-          <g key={days}>
+          <g key={keys[i]}>
             <rect x={x} y={y} width={w} height={h} rx="6" fill="#2563eb" />
             <text x={x + w / 2} y={y - 6} fontSize="10" fill="#0f172a" textAnchor="middle">
               {count}
             </text>
             <text x={x + w / 2} y={height - 10} fontSize="10" fill="#94a3b8" textAnchor="middle">
-              {days}d
+              {formatMonth(keys[i])}
             </text>
           </g>
         )
       })}
     </svg>
   )
+}
+
+function formatMonth(key: string) {
+  try {
+    const text = new Intl.DateTimeFormat('es-ES', { month: 'short', year: '2-digit' }).format(new Date(`${key}-01`))
+    return capitalize(text)
+  } catch {
+    return key
+  }
+}
+
+function formatMonthYear(dateStr: string) {
+  try {
+    const text = new Intl.DateTimeFormat('es-ES', { month: 'short', year: '2-digit' }).format(new Date(dateStr))
+    return capitalize(text)
+  } catch {
+    return ''
+  }
+}
+
+function capitalize(value: string) {
+  if (!value) return value
+  return value.charAt(0).toUpperCase() + value.slice(1)
 }

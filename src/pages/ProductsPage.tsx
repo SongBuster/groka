@@ -27,6 +27,10 @@ export default function ProductsPage() {
   const [showModal, setShowModal] = useState(false)
   const [isEditMode, setIsEditMode] = useState(false)
   const [isNewlyCreated, setIsNewlyCreated] = useState(false)
+  const [currentPage, setCurrentPage] = useState(1)
+  const pageSize = 50
+  const [viewMode, setViewMode] = useState<'paged' | 'category'>('paged')
+  const [expandedCategories, setExpandedCategories] = useState<Set<string>>(new Set())
   const [newProduct, setNewProduct] = useState({
     name: '',
     category_id: '',
@@ -42,6 +46,16 @@ export default function ProductsPage() {
   useEffect(() => {
     loadData()
   }, [])
+
+  useEffect(() => {
+    setCurrentPage(1)
+  }, [searchQuery, filterStatus, selectedCategory])
+
+  useEffect(() => {
+    if (viewMode === 'category') {
+      setExpandedCategories(new Set())
+    }
+  }, [viewMode])
 
 
   const loadData = async () => {
@@ -312,6 +326,17 @@ export default function ProductsPage() {
     }
   }
 
+  const totalPages = Math.max(1, Math.ceil(filteredProducts.length / pageSize))
+  const safePage = Math.min(currentPage, totalPages)
+  const paginatedProducts = filteredProducts.slice((safePage - 1) * pageSize, safePage * pageSize)
+
+  const productsByCategory = filteredProducts.reduce((map, product) => {
+    const name = product.category?.name || 'Sin categoría'
+    if (!map.has(name)) map.set(name, [])
+    map.get(name)!.push(product)
+    return map
+  }, new Map<string, ProductWithCategory[]>())
+
   return (
     <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-6 sm:py-8">
       {/* Header */}
@@ -353,7 +378,20 @@ export default function ProductsPage() {
       </div>
 
       {/* Stats Cards - Clickable Filters */}
-      <div className="grid grid-cols-2 lg:grid-cols-4 gap-4 mb-6">
+      <div className="sm:hidden mb-6">
+        <label className="block text-sm font-medium text-secondary-700 mb-1">Estado</label>
+        <CustomSelect
+          options={[
+            { value: 'all', label: `Total productos (${stats.total})` },
+            { value: 'reviewed', label: `Revisados (${stats.reviewed})` },
+            { value: 'pending', label: `Pendientes (${stats.pending})` },
+            { value: 'uncategorized', label: `Sin categoría (${stats.uncategorized})` }
+          ]}
+          value={filterStatus}
+          onChange={(value) => setFilterStatus(value as ReviewStatus)}
+        />
+      </div>
+      <div className="hidden sm:grid grid-cols-2 lg:grid-cols-4 gap-4 mb-6">
         <button
           onClick={() => setFilterStatus('all')}
           className={`bg-white rounded-xl p-4 border transition-all text-left hover:shadow-md ${
@@ -431,6 +469,26 @@ export default function ProductsPage() {
             placeholder="Todas las categorías"
             className="md:w-64"
           />
+          <div className="flex items-center gap-2">
+            <button
+              onClick={() => setViewMode('paged')}
+              className={`px-3 py-2 rounded-lg text-sm border transition ${viewMode === 'paged'
+                ? 'bg-primary-600 text-white border-primary-600'
+                : 'bg-white text-secondary-700 border-secondary-300 hover:bg-secondary-50'
+              }`}
+            >
+              Paginada
+            </button>
+            <button
+              onClick={() => setViewMode('category')}
+              className={`px-3 py-2 rounded-lg text-sm border transition ${viewMode === 'category'
+                ? 'bg-primary-600 text-white border-primary-600'
+                : 'bg-white text-secondary-700 border-secondary-300 hover:bg-secondary-50'
+              }`}
+            >
+              Por categorías
+            </button>
+          </div>
         </div>
       </div>
 
@@ -451,8 +509,30 @@ export default function ProductsPage() {
               : 'Los productos de tus tickets aparecerán aquí'}
           </p>
         </div>
-      ) : (
+      ) : viewMode === 'paged' ? (
         <div className="bg-white rounded-xl border border-secondary-200 overflow-hidden">
+          <div className="flex items-center justify-between px-4 py-3 border-b border-secondary-200 text-sm text-secondary-600">
+            <span>
+              Mostrando {(safePage - 1) * pageSize + 1}-{Math.min(safePage * pageSize, filteredProducts.length)} de {filteredProducts.length}
+            </span>
+            <div className="flex items-center gap-2">
+              <button
+                onClick={() => setCurrentPage(p => Math.max(1, p - 1))}
+                disabled={safePage === 1}
+                className="px-3 py-1.5 border border-secondary-300 rounded-lg hover:bg-secondary-50 disabled:opacity-50"
+              >
+                Anterior
+              </button>
+              <span className="text-xs text-secondary-500">{safePage} / {totalPages}</span>
+              <button
+                onClick={() => setCurrentPage(p => Math.min(totalPages, p + 1))}
+                disabled={safePage === totalPages}
+                className="px-3 py-1.5 border border-secondary-300 rounded-lg hover:bg-secondary-50 disabled:opacity-50"
+              >
+                Siguiente
+              </button>
+            </div>
+          </div>
           <div className="overflow-x-auto">
             <table className="w-full">
               <thead className="bg-secondary-50 border-b border-secondary-200">
@@ -475,7 +555,7 @@ export default function ProductsPage() {
                 </tr>
               </thead>
               <tbody className="divide-y divide-secondary-200">
-                {filteredProducts.map((product) => (
+                {paginatedProducts.map((product) => (
                   <tr
                     key={product.id}
                     className="hover:bg-secondary-50 transition-colors cursor-pointer"
@@ -552,6 +632,112 @@ export default function ProductsPage() {
               </tbody>
             </table>
           </div>
+        </div>
+      ) : (
+        <div className="space-y-6">
+          {Array.from(productsByCategory.entries())
+            .sort((a, b) => a[0].localeCompare(b[0]))
+            .map(([categoryName, items]) => (
+              <div key={categoryName} className="bg-white rounded-xl border border-secondary-200 overflow-hidden">
+                <button
+                  onClick={() => {
+                    setExpandedCategories(prev => {
+                      const next = new Set(prev)
+                      if (next.has(categoryName)) next.delete(categoryName)
+                      else next.add(categoryName)
+                      return next
+                    })
+                  }}
+                  className="w-full px-4 py-3 border-b border-secondary-200 text-sm font-semibold text-secondary-700 flex items-center justify-between hover:bg-secondary-50"
+                >
+                  <span>{categoryName} · {items.length}</span>
+                  <span className="text-secondary-500">{expandedCategories.has(categoryName) ? '▾' : '▸'}</span>
+                </button>
+                {expandedCategories.has(categoryName) && (
+                  <div className="overflow-x-auto">
+                    <table className="w-full">
+                      <thead className="bg-secondary-50 border-b border-secondary-200">
+                        <tr>
+                          <th className="px-4 py-3 text-left text-xs font-medium text-secondary-700 uppercase tracking-wider">
+                            Estado
+                          </th>
+                          <th className="px-4 py-3 text-left text-xs font-medium text-secondary-700 uppercase tracking-wider">
+                            Nombre
+                          </th>
+                          <th className="px-4 py-3 text-left text-xs font-medium text-secondary-700 uppercase tracking-wider">
+                            Aliases
+                          </th>
+                          <th className="px-4 py-3 text-right text-xs font-medium text-secondary-700 uppercase tracking-wider">
+                            Acciones
+                          </th>
+                        </tr>
+                      </thead>
+                      <tbody className="divide-y divide-secondary-200">
+                        {items.map((product) => (
+                          <tr
+                            key={product.id}
+                            className="hover:bg-secondary-50 transition-colors cursor-pointer"
+                            onClick={() => openDetailsModal(product)}
+                          >
+                            <td className="px-4 py-3 whitespace-nowrap">
+                              <div className="flex items-center gap-2">
+                                {getStatusIcon(product.review_status)}
+                                <span className="text-sm text-secondary-600">
+                                  {getStatusLabel(product.review_status)}
+                                </span>
+                              </div>
+                            </td>
+                            <td className="px-4 py-3">
+                              <div className="text-sm font-medium text-secondary-900">
+                                {product.name}
+                              </div>
+                            </td>
+                            <td className="px-4 py-3">
+                              {product.aliases && product.aliases.length > 0 ? (
+                                <div className="flex flex-wrap gap-1">
+                                  {product.aliases.map((alias) => (
+                                    <span key={alias} className="inline-block px-2 py-1 bg-secondary-100 text-secondary-700 rounded text-xs">
+                                      {alias}
+                                    </span>
+                                  ))}
+                                </div>
+                              ) : (
+                                <span className="text-secondary-400 text-xs">-</span>
+                              )}
+                            </td>
+                            <td className="px-4 py-3 text-right">
+                              <div className="flex gap-2 justify-end">
+                                <button
+                                  onClick={(e) => {
+                                    e.stopPropagation()
+                                    openEditModal(product)
+                                  }}
+                                  className="inline-flex items-center gap-1 px-3 py-1 text-sm text-primary-700 hover:bg-primary-50 rounded-lg transition-colors"
+                                >
+                                  <Edit2 className="w-4 h-4" />
+                                  Editar
+                                </button>
+                                <button
+                                  onClick={(e) => {
+                                    e.stopPropagation()
+                                    setCurrentProduct(product)
+                                    handleDeleteProduct()
+                                  }}
+                                  className="inline-flex items-center gap-1 px-3 py-1 text-sm text-red-700 hover:bg-red-50 rounded-lg transition-colors"
+                                >
+                                  <Trash2 className="w-4 h-4" />
+                                  Eliminar
+                                </button>
+                              </div>
+                            </td>
+                          </tr>
+                        ))}
+                      </tbody>
+                    </table>
+                  </div>
+                )}
+              </div>
+            ))}
         </div>
       )}
 

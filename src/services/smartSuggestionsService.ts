@@ -29,7 +29,8 @@ class SmartSuggestionsService {
     userId: string, 
     shoppingListId?: string,
     minPurchases: number = 3,
-    urgencyThreshold: number = 0.8
+    urgencyThreshold: number = 0.8,
+    maxRecencyDays: number = 365
   ): Promise<ProductSuggestion[]> {
     try {
       // 1. Obtener todos los ticket_items con sus fechas de compra (paginado)
@@ -217,6 +218,9 @@ class SmartSuggestionsService {
         // Días desde última compra
         const lastPurchaseDate = sortedDates[sortedDates.length - 1]
         const daysSinceLast = (now.getTime() - lastPurchaseDate.getTime()) / (1000 * 60 * 60 * 24)
+
+        // Si la última compra es demasiado antigua, no sugerir (prioriza compras recientes)
+        if (daysSinceLast > maxRecencyDays) continue
 
         // Calcular urgency score base
         const baseUrgencyScore = daysSinceLast / averageDays

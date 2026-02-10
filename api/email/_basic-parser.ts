@@ -71,6 +71,34 @@ function normalizeTime(timeStr: string | null): string | null {
   return `${hour}:${minute}`
 }
 
+function extractDateTime(fullText: string): { date: string | null; time: string | null } {
+  // Date followed by time (allow separators and small gaps)
+  let match = fullText.match(/(\d{1,2}[/-]\d{1,2}[/-]\d{2,4})[^\d]{0,10}(\d{1,2}[:.]\d{2})(?::\d{2})?/)
+  if (match) {
+    return {
+      date: convertToISODate(match[1]),
+      time: normalizeTime(match[2])
+    }
+  }
+
+  // Time followed by date
+  match = fullText.match(/(\d{1,2}[:.]\d{2})(?::\d{2})?[^\d]{0,10}(\d{1,2}[/-]\d{1,2}[/-]\d{2,4})/)
+  if (match) {
+    return {
+      date: convertToISODate(match[2]),
+      time: normalizeTime(match[1])
+    }
+  }
+
+  // Date only
+  const dateMatch = fullText.match(/(\d{1,2}[/-]\d{1,2}[/-]\d{2,4})/)
+  const timeMatch = fullText.match(/\b(\d{1,2}[:.]\d{2})(?::\d{2})?\b/)
+  return {
+    date: dateMatch ? convertToISODate(dateMatch[1]) : null,
+    time: timeMatch ? normalizeTime(timeMatch[1]) : null
+  }
+}
+
 /**
  * Detect supermarket from NIF or name patterns and get ID from DB
  */
@@ -122,22 +150,10 @@ export async function parseBasicTicket(pdfBuffer: Buffer): Promise<BasicTicketDa
     result.store = supermarket.name
     result.supermarketId = supermarket.id
 
-    // Extract date and time: DD/MM/YYYY HH:MM or DD-MM-YYYY HH:MM
-    const dateTimeMatch = fullText.match(/(\d{1,2}[/-]\d{1,2}[/-]\d{2,4})\s*(\d{1,2}[:.]\d{2}(?::\d{2})?)/)
-    if (dateTimeMatch) {
-      result.date = convertToISODate(dateTimeMatch[1])
-      result.time = normalizeTime(dateTimeMatch[2])
-    } else {
-      // Try date only
-      const dateMatch = fullText.match(/(\d{1,2}[/-]\d{1,2}[/-]\d{2,4})/)
-      if (dateMatch) {
-        result.date = convertToISODate(dateMatch[1])
-      }
-      const timeMatch = fullText.match(/\b(\d{1,2}[:.]\d{2})(?::\d{2})?\b/)
-      if (timeMatch) {
-        result.time = normalizeTime(timeMatch[1])
-      }
-    }
+    // Extract date and time (robust)
+    const extracted = extractDateTime(fullText)
+    result.date = extracted.date
+    result.time = extracted.time
 
     // Extract store location for Mercadona
     if (supermarket.name === 'MERCADONA') {
