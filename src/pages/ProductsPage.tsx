@@ -412,7 +412,7 @@ export default function ProductsPage() {
                 placeholder="Buscar productos..."
                 value={searchQuery}
                 onChange={(e) => setSearchQuery(e.target.value)}
-                className="w-full pl-10 pr-4 py-2 border border-secondary-300 rounded-lg focus:ring-2 focus:ring-primary-500 focus:border-transparent"
+                className="w-full pl-10 pr-4 py-2 border border-secondary-300 rounded-lg focus:ring-2 focus:ring-primary-500 focus:border-transparent bg-white text-secondary-900 placeholder:text-secondary-400"
               />
             </div>
           </div>
@@ -626,7 +626,7 @@ export default function ProductsPage() {
                         ? currentProduct?.category ? `${currentProduct.category.icon} ${currentProduct.category.name}` : 'Escribe para buscar...'
                         : newProduct.category_id ? categories.find(c => c.id === newProduct.category_id)?.name || 'Escribe para buscar...' : 'Escribe para buscar...'
                     }
-                    className="w-full px-4 py-2 border-2 border-primary-300 rounded-lg focus:ring-2 focus:ring-primary-500 focus:border-primary-500 transition-all"
+                    className="w-full px-4 py-2 border-2 border-primary-300 rounded-lg focus:ring-2 focus:ring-primary-500 focus:border-primary-500 transition-all bg-white text-secondary-900 placeholder:text-secondary-400"
                   />
                   {showCategoryDropdown && (
                     <div className="absolute top-full left-0 right-0 mt-1 bg-white border border-secondary-300 rounded-lg shadow-lg max-h-64 overflow-y-auto z-50">

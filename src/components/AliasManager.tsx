@@ -92,7 +92,7 @@ export default function AliasManager({ productId, aliases: initialAliases, onUpd
             if (e.key === 'Enter') handleAddAlias()
           }}
           placeholder="Añadir nuevo alias..."
-          className="flex-1 px-3 py-2 border border-secondary-300 rounded-lg text-sm focus:ring-2 focus:ring-primary-500 focus:border-transparent"
+          className="flex-1 px-3 py-2 border border-secondary-300 rounded-lg text-sm focus:ring-2 focus:ring-primary-500 focus:border-transparent bg-white text-secondary-900 placeholder:text-secondary-400"
           disabled={loading}
         />
         <button
