@@ -21,6 +21,7 @@ import { parseBasicTicket } from './_basic-parser.js'
 
 // Gmail API configuration
 const GMAIL_API_BASE = 'https://www.googleapis.com/gmail/v1/users/me'
+const DEFAULT_TICKET_TZ = process.env.GMAIL_TICKET_TZ || 'Europe/Madrid'
 
 interface EmailProcessor {
   processedCount: number
@@ -190,6 +191,41 @@ function base64ToBuffer(base64: string): Buffer {
   // Gmail uses base64url encoding
   const base64Standard = base64.replace(/-/g, '+').replace(/_/g, '/')
   return Buffer.from(base64Standard, 'base64')
+}
+
+function getTimeZoneOffsetMinutes(timeZone: string, date: Date): number {
+  try {
+    const parts = new Intl.DateTimeFormat('en-US', {
+      timeZone,
+      timeZoneName: 'shortOffset',
+      year: 'numeric',
+      month: '2-digit',
+      day: '2-digit',
+      hour: '2-digit',
+      minute: '2-digit',
+      hour12: false
+    }).formatToParts(date)
+    const tzName = parts.find(p => p.type === 'timeZoneName')?.value || 'GMT'
+    const match = tzName.match(/GMT([+-])(\d{1,2})(?::?(\d{2}))?/) || tzName.match(/UTC([+-])(\d{1,2})(?::?(\d{2}))?/)
+    if (!match) return 0
+    const sign = match[1] === '-' ? -1 : 1
+    const hours = parseInt(match[2], 10)
+    const minutes = match[3] ? parseInt(match[3], 10) : 0
+    return sign * (hours * 60 + minutes)
+  } catch {
+    return 0
+  }
+}
+
+function buildPurchaseDateTime(dateStr: string | null, timeStr: string | null): string | null {
+  if (!dateStr) return null
+  if (!timeStr) return dateStr
+  const [year, month, day] = dateStr.split('-').map(Number)
+  const [hour, minute] = timeStr.split(':').map(Number)
+  const utcBaseline = new Date(Date.UTC(year, month - 1, day, hour, minute, 0))
+  const offsetMinutes = getTimeZoneOffsetMinutes(DEFAULT_TICKET_TZ, utcBaseline)
+  const utcDate = new Date(utcBaseline.getTime() - offsetMinutes * 60 * 1000)
+  return utcDate.toISOString()
 }
 
 /**
@@ -501,10 +537,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
             const { data: { publicUrl } } = supabase.storage.from('tickets').getPublicUrl(fileName)
 
             // Combine date + time if available
-            let purchaseDateTime = basicInfo?.date || null
-            if (purchaseDateTime && basicInfo?.time) {
-              purchaseDateTime = `${purchaseDateTime}T${basicInfo.time}:00`
-            }
+            const purchaseDateTime = buildPurchaseDateTime(basicInfo?.date || null, basicInfo?.time || null)
 
             // Prevent duplicates: same user + supermarket (or store) + purchase datetime
             if (purchaseDateTime) {

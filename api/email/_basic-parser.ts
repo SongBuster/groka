@@ -62,6 +62,15 @@ function convertToISODate(dateStr: string | null): string | null {
   return `${year}-${month}-${day}`
 }
 
+function normalizeTime(timeStr: string | null): string | null {
+  if (!timeStr) return null
+  const match = timeStr.match(/(\d{1,2})[:.](\d{2})(?::\d{2})?/)
+  if (!match) return null
+  const hour = match[1].padStart(2, '0')
+  const minute = match[2]
+  return `${hour}:${minute}`
+}
+
 /**
  * Detect supermarket from NIF or name patterns and get ID from DB
  */
@@ -114,15 +123,19 @@ export async function parseBasicTicket(pdfBuffer: Buffer): Promise<BasicTicketDa
     result.supermarketId = supermarket.id
 
     // Extract date and time: DD/MM/YYYY HH:MM or DD-MM-YYYY HH:MM
-    const dateTimeMatch = fullText.match(/(\d{1,2}[/-]\d{1,2}[/-]\d{2,4})\s+(\d{1,2}:\d{2})/)
+    const dateTimeMatch = fullText.match(/(\d{1,2}[/-]\d{1,2}[/-]\d{2,4})\s*(\d{1,2}[:.]\d{2}(?::\d{2})?)/)
     if (dateTimeMatch) {
       result.date = convertToISODate(dateTimeMatch[1])
-      result.time = dateTimeMatch[2]
+      result.time = normalizeTime(dateTimeMatch[2])
     } else {
       // Try date only
       const dateMatch = fullText.match(/(\d{1,2}[/-]\d{1,2}[/-]\d{2,4})/)
       if (dateMatch) {
         result.date = convertToISODate(dateMatch[1])
+      }
+      const timeMatch = fullText.match(/\b(\d{1,2}[:.]\d{2})(?::\d{2})?\b/)
+      if (timeMatch) {
+        result.time = normalizeTime(timeMatch[1])
       }
     }
 
