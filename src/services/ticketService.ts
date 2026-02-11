@@ -296,12 +296,56 @@ export class TicketService {
     // Parse PDF
     const parsedData = await pdfParser.parseTicketFromFile(file)
 
+    // Combine date and time for purchase_date
+    let purchaseDateTime = parsedData.date
+    if (parsedData.time) {
+      // If we have time, combine it with date in Europe/Madrid timezone
+      const datePart = parsedData.date // Already in ISO format YYYY-MM-DD
+      const timePart = parsedData.time // HH:MM format
+      
+      // Create datetime in local timezone (Europe/Madrid)
+      const localDateTime = new Date(`${datePart}T${timePart}:00`)
+      
+      // Get timezone offset for Europe/Madrid
+      const madridFormatter = new Intl.DateTimeFormat('en-US', {
+        timeZone: 'Europe/Madrid',
+        year: 'numeric',
+        month: '2-digit',
+        day: '2-digit',
+        hour: '2-digit',
+        minute: '2-digit',
+        second: '2-digit',
+        hour12: false
+      })
+      
+      const madridParts = madridFormatter.formatToParts(localDateTime)
+      const getPartValue = (type: string) => madridParts.find(p => p.type === type)?.value || '00'
+      
+      const year = getPartValue('year')
+      const month = getPartValue('month')
+      const day = getPartValue('day')
+      const hour = getPartValue('hour')
+      const minute = getPartValue('minute')
+      const second = getPartValue('second')
+      
+      // Calculate offset in minutes
+      const madridTime = new Date(`${year}-${month}-${day}T${hour}:${minute}:${second}Z`).getTime()
+      const utcTime = new Date(localDateTime).getTime()
+      const offsetMinutes = (madridTime - utcTime) / 60000
+      const offsetHours = Math.floor(Math.abs(offsetMinutes) / 60)
+      const offsetMins = Math.abs(offsetMinutes) % 60
+      const offsetSign = offsetMinutes >= 0 ? '+' : '-'
+      const offsetStr = `${offsetSign}${String(offsetHours).padStart(2, '0')}:${String(offsetMins).padStart(2, '0')}`
+      
+      purchaseDateTime = `${datePart}T${timePart}:00${offsetStr}`
+    }
+
     // Update ticket data
     const updateData: TicketInsert = {
       supermarket_id: parsedData.supermarketId,
       ticket_number: parsedData.invoiceNumber,
       store_name: parsedData.store || parsedData.supermarketName,
-      purchase_date: parsedData.date,
+      purchase_date: purchaseDateTime,
       total_amount: parsedData.totalFromPDF ?? parsedData.totalAmount ?? null,
       parsed: true,
       parsing_error: null,
