@@ -506,6 +506,10 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
                 supermarketId: basicData.supermarketId
               }
               console.log(`✓ Basic parse: ${basicInfo.store} - ${basicInfo.date} ${basicInfo.time || ''} - ${basicInfo.totalFromPDF}€`)
+              console.log("[gmail-poller] [Chat-GPT] parsed date/time raw:", {
+                date: basicData.date,
+                time: basicData.time
+              })
             } catch (parseError: any) {
               console.warn(`⚠ Basic parse failed for ${attachment.filename}:`, parseError.message)
               // Continue without parsing - will be marked as pending
