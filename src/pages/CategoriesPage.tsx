@@ -365,7 +365,7 @@ export default function CategoriesPage() {
                   value={formData.name}
                   onChange={(e) => setFormData({ ...formData, name: e.target.value })}
                   placeholder="Ej: Frutas y Verduras"
-                  className="w-full px-4 py-2 border border-secondary-300 rounded-lg focus:ring-2 focus:ring-primary-500 focus:border-transparent"
+                  className="w-full px-4 py-2 border border-secondary-300 rounded-lg focus:ring-2 focus:ring-primary-500 focus:border-transparent bg-white text-secondary-900 placeholder:text-secondary-400 dark:bg-secondary-900 dark:text-secondary-100 dark:border-secondary-700"
                   required
                 />
               </div>
@@ -381,7 +381,7 @@ export default function CategoriesPage() {
                     value={formData.icon}
                     onChange={(e) => setFormData({ ...formData, icon: e.target.value })}
                     placeholder="🥬"
-                    className="w-16 px-3 py-2 border border-secondary-300 rounded-lg focus:ring-2 focus:ring-primary-500 focus:border-transparent text-center text-2xl"
+                    className="w-16 px-3 py-2 border border-secondary-300 rounded-lg focus:ring-2 focus:ring-primary-500 focus:border-transparent text-center text-2xl bg-white text-secondary-900 placeholder:text-secondary-400 dark:bg-secondary-900 dark:text-secondary-100 dark:border-secondary-700"
                     maxLength={2}
                   />
                   <span className="text-sm text-secondary-600">Escribe o selecciona:</span>
@@ -427,7 +427,7 @@ export default function CategoriesPage() {
                           setFormData({ ...formData, color: value })
                         }
                       }}
-                      className="w-full px-4 py-2 border border-secondary-300 rounded-lg focus:ring-2 focus:ring-primary-500 focus:border-transparent font-mono"
+                      className="w-full px-4 py-2 border border-secondary-300 rounded-lg focus:ring-2 focus:ring-primary-500 focus:border-transparent font-mono bg-white text-secondary-900 placeholder:text-secondary-400 dark:bg-secondary-900 dark:text-secondary-100 dark:border-secondary-700"
                       placeholder="#22c55e"
                     />
                     <p className="text-xs text-secondary-600 mt-1">
@@ -449,7 +449,7 @@ export default function CategoriesPage() {
                     onChange={(e) => setKeywordInput(e.target.value)}
                     onKeyPress={(e) => e.key === 'Enter' && (e.preventDefault(), handleAddKeyword())}
                     placeholder="Escribe una palabra y presiona Enter"
-                    className="flex-1 px-4 py-2 border border-secondary-300 rounded-lg focus:ring-2 focus:ring-primary-500 focus:border-transparent"
+                    className="flex-1 px-4 py-2 border border-secondary-300 rounded-lg focus:ring-2 focus:ring-primary-500 focus:border-transparent bg-white text-secondary-900 placeholder:text-secondary-400 dark:bg-secondary-900 dark:text-secondary-100 dark:border-secondary-700"
                   />
                   <button
                     onClick={handleAddKeyword}

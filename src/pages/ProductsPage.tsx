@@ -1,4 +1,5 @@
-import { useState, useEffect } from 'react'
+import { useState, useEffect, useRef } from 'react'
+import { Link } from 'react-router-dom'
 import { Search, CheckCircle, AlertCircle, Clock, Edit2, Plus, Trash2, RefreshCcw } from 'lucide-react'
 import productService, { type ProductWithCategory, type ProductStatsDetail } from '../services/productService'
 import categoryService from '../services/categoryService'
@@ -42,6 +43,11 @@ export default function ProductsPage() {
   const [selectedProduct, setSelectedProduct] = useState<ProductWithCategory | null>(null)
   const [productStats, setProductStats] = useState<ProductStatsDetail | null>(null)
   const [loadingStats, setLoadingStats] = useState(false)
+  const [selectedProductIds, setSelectedProductIds] = useState<Set<string>>(new Set())
+  const [bulkAction, setBulkAction] = useState<'delete' | 'apply-assigned-category' | 'apply-category' | ''>('')
+  const [bulkCategoryId, setBulkCategoryId] = useState('')
+  const [bulkWorking, setBulkWorking] = useState(false)
+  const selectAllRef = useRef<HTMLInputElement | null>(null)
 
   useEffect(() => {
     loadData()
@@ -54,6 +60,14 @@ export default function ProductsPage() {
   useEffect(() => {
     if (viewMode === 'category') {
       setExpandedCategories(new Set())
+    }
+  }, [viewMode])
+
+  useEffect(() => {
+    if (viewMode !== 'paged') {
+      setSelectedProductIds(new Set())
+      setBulkAction('')
+      setBulkCategoryId('')
     }
   }, [viewMode])
 
@@ -337,6 +351,93 @@ export default function ProductsPage() {
     return map
   }, new Map<string, ProductWithCategory[]>())
 
+  const canBulkSelect = viewMode === 'paged'
+  const visibleSelectableProducts = canBulkSelect ? paginatedProducts : []
+  const allVisibleSelected = visibleSelectableProducts.length > 0 && visibleSelectableProducts.every(p => selectedProductIds.has(p.id))
+  const someVisibleSelected = visibleSelectableProducts.some(p => selectedProductIds.has(p.id))
+
+  useEffect(() => {
+    if (selectAllRef.current) {
+      selectAllRef.current.indeterminate = !allVisibleSelected && someVisibleSelected
+    }
+  }, [allVisibleSelected, someVisibleSelected])
+
+  const toggleSelectAllVisible = () => {
+    setSelectedProductIds(prev => {
+      const next = new Set(prev)
+      if (allVisibleSelected) {
+        visibleSelectableProducts.forEach(p => next.delete(p.id))
+      } else {
+        visibleSelectableProducts.forEach(p => next.add(p.id))
+      }
+      return next
+    })
+  }
+
+  const toggleSelectOne = (productId: string) => {
+    setSelectedProductIds(prev => {
+      const next = new Set(prev)
+      if (next.has(productId)) next.delete(productId)
+      else next.add(productId)
+      return next
+    })
+  }
+
+  const clearSelection = () => {
+    setSelectedProductIds(new Set())
+    setBulkAction('')
+    setBulkCategoryId('')
+  }
+
+  const handleBulkApply = async () => {
+    if (!user?.id) return
+    if (selectedProductIds.size === 0 || !bulkAction) return
+
+    const selectedProducts = products.filter(p => selectedProductIds.has(p.id))
+    if (selectedProducts.length === 0) return
+
+    if (bulkAction === 'delete') {
+      const confirmed = await confirm({
+        title: 'Eliminar productos seleccionados',
+        message: `Vas a eliminar ${selectedProducts.length} productos. Esta acción no se puede deshacer.`,
+        type: 'warning',
+        confirmText: 'Eliminar',
+        cancelText: 'Cancelar'
+      })
+      if (!confirmed) return
+    }
+
+    try {
+      setBulkWorking(true)
+      if (bulkAction === 'delete') {
+        await Promise.all(selectedProducts.map(p => productService.delete(p.id, user.id)))
+      } else if (bulkAction === 'apply-assigned-category') {
+        const withCategory = selectedProducts.filter(p => p.category_id)
+        await Promise.all(withCategory.map(p => productService.update(p.id, { review_status: 'reviewed' }, user.id)))
+      } else if (bulkAction === 'apply-category') {
+        if (!bulkCategoryId) return
+        await Promise.all(selectedProducts.map(p => productService.update(
+          p.id,
+          { category_id: bulkCategoryId, review_status: 'reviewed' },
+          user.id
+        )))
+      }
+
+      await loadData()
+      notifyProductsUpdated()
+      clearSelection()
+    } catch (error) {
+      console.error('Error applying bulk action:', error)
+      alert({
+        title: 'Error',
+        message: 'No se pudo aplicar la acción a los productos seleccionados.',
+        type: 'error'
+      })
+    } finally {
+      setBulkWorking(false)
+    }
+  }
+
   return (
     <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-6 sm:py-8">
       {/* Header */}
@@ -357,12 +458,12 @@ export default function ProductsPage() {
             <Plus className="w-5 h-5" />
             <span>Nuevo Producto</span>
           </button>
-          <a
-            href="/categories"
+          <Link
+            to="/categories"
             className="flex items-center gap-2 px-4 py-2 text-primary-700 border border-primary-300 rounded-lg hover:bg-primary-50 transition-colors"
           >
             <span className="text-sm font-medium">Categorías</span>
-          </a>
+          </Link>
           <button
             onClick={handleReplaceWithGlobal}
             disabled={replacingWithGlobal}
@@ -510,127 +611,199 @@ export default function ProductsPage() {
           </p>
         </div>
       ) : viewMode === 'paged' ? (
-        <div className="bg-white rounded-xl border border-secondary-200 overflow-hidden">
-          <div className="flex items-center justify-between px-4 py-3 border-b border-secondary-200 text-sm text-secondary-600">
-            <span>
-              Mostrando {(safePage - 1) * pageSize + 1}-{Math.min(safePage * pageSize, filteredProducts.length)} de {filteredProducts.length}
-            </span>
-            <div className="flex items-center gap-2">
-              <button
-                onClick={() => setCurrentPage(p => Math.max(1, p - 1))}
-                disabled={safePage === 1}
-                className="px-3 py-1.5 border border-secondary-300 rounded-lg hover:bg-secondary-50 disabled:opacity-50"
-              >
-                Anterior
-              </button>
-              <span className="text-xs text-secondary-500">{safePage} / {totalPages}</span>
-              <button
-                onClick={() => setCurrentPage(p => Math.min(totalPages, p + 1))}
-                disabled={safePage === totalPages}
-                className="px-3 py-1.5 border border-secondary-300 rounded-lg hover:bg-secondary-50 disabled:opacity-50"
-              >
-                Siguiente
-              </button>
+        <div className="space-y-3">
+          {canBulkSelect && (
+            <div className="hidden md:flex bg-white rounded-xl border border-secondary-200 px-4 py-3 flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+              <div className="text-sm text-secondary-600">
+                Seleccionados: <span className="font-semibold text-secondary-900">{selectedProductIds.size}</span>
+              </div>
+              <div className="flex flex-col sm:flex-row gap-2 sm:items-center">
+                <CustomSelect
+                  options={[
+                    { value: '', label: 'Acciones...' },
+                    { value: 'delete', label: 'Eliminar' },
+                    { value: 'apply-assigned-category', label: 'Aplicar categoría asignada' },
+                    { value: 'apply-category', label: 'Aplicar la misma categoría' }
+                  ]}
+                  value={bulkAction}
+                  onChange={(value) => setBulkAction(value as any)}
+                  placeholder="Acciones..."
+                />
+                {bulkAction === 'apply-category' && (
+                  <CustomSelect
+                    options={[
+                      { value: '', label: 'Selecciona categoría...' },
+                      ...categories.map(category => ({
+                        value: category.id,
+                        label: `${category.icon ? `${category.icon} ` : ''}${category.name}`
+                      }))
+                    ]}
+                    value={bulkCategoryId}
+                    onChange={(value) => setBulkCategoryId(value)}
+                    placeholder="Selecciona categoría..."
+                  />
+                )}
+                <button
+                  onClick={handleBulkApply}
+                  disabled={selectedProductIds.size === 0 || !bulkAction || bulkWorking || (bulkAction === 'apply-category' && !bulkCategoryId)}
+                  className="px-4 py-2 bg-primary-600 text-white rounded-lg hover:bg-primary-700 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+                >
+                  {bulkWorking ? 'Aplicando…' : 'Aplicar'}
+                </button>
+                <button
+                  onClick={clearSelection}
+                  disabled={selectedProductIds.size === 0}
+                  className="px-3 py-2 border border-secondary-300 text-secondary-700 rounded-lg hover:bg-secondary-50 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+                >
+                  Limpiar
+                </button>
+              </div>
             </div>
-          </div>
-          <div className="overflow-x-auto">
-            <table className="w-full">
-              <thead className="bg-secondary-50 border-b border-secondary-200">
-                <tr>
-                  <th className="px-4 py-3 text-left text-xs font-medium text-secondary-700 uppercase tracking-wider">
-                    Estado
-                  </th>
-                  <th className="px-4 py-3 text-left text-xs font-medium text-secondary-700 uppercase tracking-wider">
-                    Nombre
-                  </th>
-                  <th className="px-4 py-3 text-left text-xs font-medium text-secondary-700 uppercase tracking-wider">
-                    Aliases
-                  </th>
-                  <th className="px-4 py-3 text-left text-xs font-medium text-secondary-700 uppercase tracking-wider">
-                    Categoría
-                  </th>
-                  <th className="px-4 py-3 text-right text-xs font-medium text-secondary-700 uppercase tracking-wider">
-                    Acciones
-                  </th>
-                </tr>
-              </thead>
-              <tbody className="divide-y divide-secondary-200">
-                {paginatedProducts.map((product) => (
-                  <tr
-                    key={product.id}
-                    className="hover:bg-secondary-50 transition-colors cursor-pointer"
-                    onClick={() => openDetailsModal(product)}
-                  >
-                    <td className="px-4 py-3 whitespace-nowrap">
-                      <div className="flex items-center gap-2">
-                        {getStatusIcon(product.review_status)}
-                        <span className="text-sm text-secondary-600">
-                          {getStatusLabel(product.review_status)}
-                        </span>
-                      </div>
-                    </td>
-                    <td className="px-4 py-3">
-                      <div className="text-sm font-medium text-secondary-900">
-                        {product.name}
-                      </div>
-                    </td>
-                    <td className="px-4 py-3">
-                      {product.aliases && product.aliases.length > 0 ? (
-                        <div className="flex flex-wrap gap-1">
-                          {product.aliases.map((alias) => (
-                            <span key={alias} className="inline-block px-2 py-1 bg-secondary-100 text-secondary-700 rounded text-xs">
-                              {alias}
-                            </span>
-                          ))}
-                        </div>
-                      ) : (
-                        <span className="text-secondary-400 text-xs">-</span>
-                      )}
-                    </td>
-                    <td className="px-4 py-3">
-                      {product.category ? (
-                        <span 
-                          className="inline-flex items-center gap-1 px-2 py-1 rounded-full text-xs font-medium" 
-                          style={{ 
-                            backgroundColor: (product.category.color || '#6b7280') + '20', 
-                            color: product.category.color || '#6b7280' 
-                          }}
-                        >
-                          {product.category.icon} {product.category.name}
-                        </span>
-                      ) : (
-                        <span className="text-sm text-secondary-400">Sin categoría</span>
-                      )}
-                    </td>
-                    <td className="px-4 py-3 text-right">
-                      <div className="flex gap-2 justify-end">
-                        <button
-                          onClick={(e) => {
-                            e.stopPropagation()
-                            openEditModal(product)
-                          }}
-                          className="inline-flex items-center gap-1 px-3 py-1 text-sm text-primary-700 hover:bg-primary-50 rounded-lg transition-colors"
-                        >
-                          <Edit2 className="w-4 h-4" />
-                          Editar
-                        </button>
-                        <button
-                          onClick={(e) => {
-                            e.stopPropagation()
-                            setCurrentProduct(product)
-                            handleDeleteProduct()
-                          }}
-                          className="inline-flex items-center gap-1 px-3 py-1 text-sm text-red-700 hover:bg-red-50 rounded-lg transition-colors"
-                        >
-                          <Trash2 className="w-4 h-4" />
-                          Eliminar
-                        </button>
-                      </div>
-                    </td>
+          )}
+          <div className="bg-white rounded-xl border border-secondary-200 overflow-hidden">
+            <div className="flex items-center justify-between px-4 py-3 border-b border-secondary-200 text-sm text-secondary-600">
+              <span>
+                Mostrando {(safePage - 1) * pageSize + 1}-{Math.min(safePage * pageSize, filteredProducts.length)} de {filteredProducts.length}
+              </span>
+              <div className="flex items-center gap-2">
+                <button
+                  onClick={() => setCurrentPage(p => Math.max(1, p - 1))}
+                  disabled={safePage === 1}
+                  className="px-3 py-1.5 border border-secondary-300 rounded-lg hover:bg-secondary-50 disabled:opacity-50"
+                >
+                  Anterior
+                </button>
+                <span className="text-xs text-secondary-500">{safePage} / {totalPages}</span>
+                <button
+                  onClick={() => setCurrentPage(p => Math.min(totalPages, p + 1))}
+                  disabled={safePage === totalPages}
+                  className="px-3 py-1.5 border border-secondary-300 rounded-lg hover:bg-secondary-50 disabled:opacity-50"
+                >
+                  Siguiente
+                </button>
+              </div>
+            </div>
+            <div className="overflow-x-auto">
+              <table className="w-full">
+                <thead className="bg-secondary-50 border-b border-secondary-200">
+                  <tr>
+                      {canBulkSelect && (
+                        <th className="hidden md:table-cell px-4 py-3 text-left text-xs font-medium text-secondary-700 uppercase tracking-wider">
+                        <input
+                          ref={selectAllRef}
+                          type="checkbox"
+                          checked={allVisibleSelected}
+                          onChange={toggleSelectAllVisible}
+                          className="h-4 w-4 rounded border-secondary-300 text-primary-600 focus:ring-primary-500"
+                        />
+                      </th>
+                    )}
+                    <th className="px-4 py-3 text-left text-xs font-medium text-secondary-700 uppercase tracking-wider">
+                      Estado
+                    </th>
+                    <th className="px-4 py-3 text-left text-xs font-medium text-secondary-700 uppercase tracking-wider">
+                      Nombre
+                    </th>
+                    <th className="px-4 py-3 text-left text-xs font-medium text-secondary-700 uppercase tracking-wider">
+                      Aliases
+                    </th>
+                    <th className="px-4 py-3 text-left text-xs font-medium text-secondary-700 uppercase tracking-wider">
+                      Categoría
+                    </th>
+                    <th className="px-4 py-3 text-right text-xs font-medium text-secondary-700 uppercase tracking-wider">
+                      Acciones
+                    </th>
                   </tr>
-                ))}
-              </tbody>
-            </table>
+                </thead>
+                <tbody className="divide-y divide-secondary-200">
+                  {paginatedProducts.map((product) => (
+                    <tr
+                      key={product.id}
+                      className="hover:bg-secondary-50 transition-colors cursor-pointer"
+                      onClick={() => openDetailsModal(product)}
+                    >
+                      {canBulkSelect && (
+                        <td className="hidden md:table-cell px-4 py-3 whitespace-nowrap">
+                          <input
+                            type="checkbox"
+                            checked={selectedProductIds.has(product.id)}
+                            onChange={() => toggleSelectOne(product.id)}
+                            onClick={(e) => e.stopPropagation()}
+                            className="h-4 w-4 rounded border-secondary-300 text-primary-600 focus:ring-primary-500"
+                          />
+                        </td>
+                      )}
+                      <td className="px-4 py-3 whitespace-nowrap">
+                        <div className="flex items-center gap-2">
+                          {getStatusIcon(product.review_status)}
+                          <span className="text-sm text-secondary-600">
+                            {getStatusLabel(product.review_status)}
+                          </span>
+                        </div>
+                      </td>
+                      <td className="px-4 py-3">
+                        <div className="text-sm font-medium text-secondary-900">
+                          {product.name}
+                        </div>
+                      </td>
+                      <td className="px-4 py-3">
+                        {product.aliases && product.aliases.length > 0 ? (
+                          <div className="flex flex-wrap gap-1">
+                            {product.aliases.map((alias) => (
+                              <span key={alias} className="inline-block px-2 py-1 bg-secondary-100 text-secondary-700 rounded text-xs">
+                                {alias}
+                              </span>
+                            ))}
+                          </div>
+                        ) : (
+                          <span className="text-secondary-400 text-xs">-</span>
+                        )}
+                      </td>
+                      <td className="px-4 py-3">
+                        {product.category ? (
+                          <span
+                            className="inline-flex items-center gap-1 px-2 py-1 rounded-full text-xs font-medium"
+                            style={{
+                              backgroundColor: (product.category.color || '#6b7280') + '20',
+                              color: product.category.color || '#6b7280'
+                            }}
+                          >
+                            {product.category.icon} {product.category.name}
+                          </span>
+                        ) : (
+                          <span className="text-sm text-secondary-400">Sin categoría</span>
+                        )}
+                      </td>
+                      <td className="px-4 py-3 text-right">
+                        <div className="flex gap-2 justify-end">
+                          <button
+                            onClick={(e) => {
+                              e.stopPropagation()
+                              openEditModal(product)
+                            }}
+                            className="inline-flex items-center gap-1 px-3 py-1 text-sm text-primary-700 hover:bg-primary-50 rounded-lg transition-colors"
+                          >
+                            <Edit2 className="w-4 h-4" />
+                            Editar
+                          </button>
+                          <button
+                            onClick={(e) => {
+                              e.stopPropagation()
+                              setCurrentProduct(product)
+                              handleDeleteProduct()
+                            }}
+                            className="inline-flex items-center gap-1 px-3 py-1 text-sm text-red-700 hover:bg-red-50 rounded-lg transition-colors"
+                          >
+                            <Trash2 className="w-4 h-4" />
+                            Eliminar
+                          </button>
+                        </div>
+                      </td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
           </div>
         </div>
       ) : (
