@@ -254,7 +254,12 @@ class ProductService {
           minPrice: null,
           lastPrice: null,
           averagePrice: null,
-          priceHistory: []
+          priceHistory: [],
+          needScore: null,
+          needConfidence: null,
+          daysOverdue: null,
+          urgencyLevel: null,
+          needReason: null
         }
       }
 
@@ -333,9 +338,9 @@ class ProductService {
 
         if (productData) {
           const history: PurchaseHistory = {
-            product_id: productData.id,
-            product_name: productData.name,
-            category_id: productData.category_id,
+            product_id: (productData as any).id,
+            product_name: (productData as any).name,
+            category_id: (productData as any).category_id,
             category_name: (productData as any).categories?.name || null,
             category_icon: (productData as any).categories?.icon || null,
             purchase_dates: purchaseDates

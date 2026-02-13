@@ -196,7 +196,6 @@ class WeibullPredictionService {
    * Genera explicación legible del score
    */
   private explainScore(
-    productName: string,
     daysSince: number,
     expectedDays: number,
     confidence: number
@@ -294,7 +293,7 @@ class WeibullPredictionService {
         last_purchase_date: lastDate,
         days_since_last_purchase: Math.round(daysSince),
         purchase_count: dates.length,
-        reason: this.explainScore(product.product_name, daysSince, expected, confidence)
+        reason: this.explainScore(daysSince, expected, confidence)
       })
     }
 
