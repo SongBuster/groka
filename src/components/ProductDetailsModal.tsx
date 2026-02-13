@@ -127,6 +127,63 @@ export default function ProductDetailsModal({
             )}
           </div>
 
+          {/* Score de Necesidad (Weibull) */}
+          {safeStats && safeStats.needScore !== null && safeStats.needScore !== undefined && (
+            <div className="bg-gradient-to-br from-blue-50 to-indigo-50 border border-blue-200 rounded-xl p-4">
+              <div className="flex items-start justify-between gap-3 mb-3">
+                <h4 className="text-sm font-semibold text-secondary-700">Score de Necesidad</h4>
+                <span
+                  className={`px-3 py-1 text-xs font-bold rounded-full whitespace-nowrap ${
+                    safeStats.urgencyLevel === 'very-high'
+                      ? 'bg-red-100 text-red-700 border border-red-300'
+                      : safeStats.urgencyLevel === 'high'
+                      ? 'bg-orange-100 text-orange-700 border border-orange-300'
+                      : safeStats.urgencyLevel === 'medium'
+                      ? 'bg-yellow-100 text-yellow-700 border border-yellow-300'
+                      : 'bg-green-100 text-green-700 border border-green-300'
+                  }`}
+                >
+                  {safeStats.urgencyLevel === 'very-high'
+                    ? '🔴 Muy urgente'
+                    : safeStats.urgencyLevel === 'high'
+                    ? '🟠 Urgente'
+                    : safeStats.urgencyLevel === 'medium'
+                    ? '🟡 Medio'
+                    : '🟢 Bajo'}
+                </span>
+              </div>
+              <div className="grid grid-cols-3 gap-3 mb-3">
+                <div>
+                  <div className="text-xs text-secondary-600 mb-1">Score</div>
+                  <div className="text-lg font-bold text-indigo-700">
+                    {safeStats.needScore.toFixed(2)}
+                  </div>
+                </div>
+                <div>
+                  <div className="text-xs text-secondary-600 mb-1">Confianza</div>
+                  <div className="text-lg font-bold text-indigo-700">
+                    {safeStats.needConfidence !== null && safeStats.needConfidence !== undefined
+                      ? `${Math.round(safeStats.needConfidence * 100)}%`
+                      : '—'}
+                  </div>
+                </div>
+                <div>
+                  <div className="text-xs text-secondary-600 mb-1">Días retraso</div>
+                  <div className="text-lg font-bold text-indigo-700">
+                    {safeStats.daysOverdue !== null && safeStats.daysOverdue !== undefined
+                      ? `${safeStats.daysOverdue > 0 ? '+' : ''}${Math.round(safeStats.daysOverdue)}`
+                      : '—'}
+                  </div>
+                </div>
+              </div>
+              {safeStats.needReason && (
+                <div className="text-xs text-secondary-700 bg-white/60 rounded-lg p-2 border border-blue-100">
+                  <span className="font-medium">Motivo:</span> {safeStats.needReason}
+                </div>
+              )}
+            </div>
+          )}
+
           <div className="bg-white border border-secondary-200 rounded-xl p-4">
             <div className="flex items-center justify-between gap-4 mb-3">
               <h4 className="text-sm font-semibold text-secondary-700">Gráficas</h4>

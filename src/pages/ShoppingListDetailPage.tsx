@@ -671,15 +671,28 @@ export default function ShoppingListDetailPage() {
                     <div
                       key={suggestion.product_id}
                       onClick={() => addSmartSuggestion(suggestion)}
-                      className="flex items-center justify-between rounded-xl p-2 border transition bg-gradient-to-r from-primary-50 to-purple-50 border-primary-200 hover:from-primary-100 hover:to-purple-100 cursor-pointer"
+                      className="flex items-center justify-between rounded-xl p-3 border transition bg-gradient-to-r from-primary-50 to-purple-50 border-primary-200 hover:from-primary-100 hover:to-purple-100 cursor-pointer"
                     >
                       <div className="flex items-center gap-3 flex-1 min-w-0">
                         <div className="flex-1 min-w-0">
-                          <div className="font-medium text-secondary-900 flex items-center gap-2">
+                          <div className="font-medium text-secondary-900 flex items-center gap-2 mb-1">
                             {suggestion.product_name}
-                            {suggestion.urgency_score >= 1.5 && (
-                              <span className="text-xs px-2 py-0.5 bg-red-100 text-red-700 rounded-full">
-                                Urgente
+                            {/* Badge de urgencia basado en score */}
+                            {suggestion.urgency_score >= 0.8 ? (
+                              <span className="text-xs px-2 py-0.5 bg-red-100 text-red-700 border border-red-300 rounded-full font-bold">
+                                🔴 Muy urgente
+                              </span>
+                            ) : suggestion.urgency_score >= 0.6 ? (
+                              <span className="text-xs px-2 py-0.5 bg-orange-100 text-orange-700 border border-orange-300 rounded-full font-bold">
+                                🟠 Urgente
+                              </span>
+                            ) : suggestion.urgency_score >= 0.4 ? (
+                              <span className="text-xs px-2 py-0.5 bg-yellow-100 text-yellow-700 border border-yellow-300 rounded-full font-bold">
+                                🟡 Medio
+                              </span>
+                            ) : (
+                              <span className="text-xs px-2 py-0.5 bg-green-100 text-green-700 border border-green-300 rounded-full font-bold">
+                                🟢 Bajo
                               </span>
                             )}
                           </div>
@@ -784,9 +797,28 @@ export default function ShoppingListDetailPage() {
                   <p>📅 Lo compras cada <strong>{selectedSuggestion.average_days_between_purchases} días</strong> en promedio</p>
                   <p>🕐 Última compra hace <strong>{selectedSuggestion.days_since_last_purchase} días</strong></p>
                   <p>📆 Fecha de última compra: <strong>{new Date(selectedSuggestion.last_purchase_date).toLocaleDateString('es-ES', { day: 'numeric', month: 'long', year: 'numeric' })}</strong></p>
-                  <p>🎯 Urgencia: <strong>{selectedSuggestion.urgency_score.toFixed(1)}x</strong> 
-                    {selectedSuggestion.urgency_score >= 1.5 ? ' (¡Muy urgente!)' : selectedSuggestion.urgency_score >= 1.2 ? ' (Urgente)' : selectedSuggestion.urgency_score >= 1.0 ? ' (En su momento)' : ' (Pronto)'}
+                  
+                  {selectedSuggestion.days_overdue !== undefined && (
+                    <p>⏱️ Retraso: <strong>{selectedSuggestion.days_overdue > 0 ? `+${selectedSuggestion.days_overdue}` : selectedSuggestion.days_overdue} días</strong>
+                      {selectedSuggestion.days_overdue > 30 ? ' (¡Muy atrasado!)' : selectedSuggestion.days_overdue > 10 ? ' (Atrasado)' : selectedSuggestion.days_overdue > 0 ? ' (Algo retrasado)' : ''}
+                    </p>
+                  )}
+                  
+                  {selectedSuggestion.confidence !== undefined && (
+                    <p>🎯 Confianza: <strong>{(selectedSuggestion.confidence * 100).toFixed(0)}%</strong>
+                      {selectedSuggestion.confidence > 0.8 ? ' (Alta)' : selectedSuggestion.confidence > 0.6 ? ' (Media)' : ' (Baja)'}
+                    </p>
+                  )}
+                  
+                  <p>📈 Score de necesidad: <strong>{selectedSuggestion.urgency_score.toFixed(2)}</strong>
+                    {selectedSuggestion.urgency_score >= 0.8 ? ' (¡Muy urgente!)' : selectedSuggestion.urgency_score >= 0.6 ? ' (Urgente)' : selectedSuggestion.urgency_score >= 0.4 ? ' (Recomendado)' : ' (Próximamente)'}
                   </p>
+                  
+                  {selectedSuggestion.reason && (
+                    <div className="mt-3 pt-3 border-t border-primary-200">
+                      <p className="text-xs text-secondary-600 italic">{selectedSuggestion.reason}</p>
+                    </div>
+                  )}
                 </div>
               </div>
 

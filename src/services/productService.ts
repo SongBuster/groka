@@ -1,5 +1,6 @@
 import { supabase } from '../lib/supabase'
 import type { Database } from '../types/database'
+import weibullPredictionService, { type PurchaseHistory } from './weibullPredictionService'
 
 type Product = Database['public']['Tables']['products']['Row']
 type ProductInsert = Database['public']['Tables']['products']['Insert']
@@ -38,6 +39,12 @@ export type ProductStatsDetail = {
   lastPrice: { value: number; date: string } | null
   averagePrice: number | null
   priceHistory: ProductPricePoint[]
+  // Campos de predicción Weibull
+  needScore: number | null // Score de necesidad [0-1+]
+  needConfidence: number | null // Confianza [0-1]
+  daysOverdue: number | null // Días de retraso vs esperado
+  urgencyLevel: 'very-high' | 'high' | 'medium' | 'low' | null // Nivel de urgencia
+  needReason: string | null // Explicación
 }
 
 class ProductService {
@@ -309,6 +316,48 @@ class ProductService {
         ? purchaseDates[purchaseDates.length - 1].toISOString()
         : null
 
+      // Calcular score de necesidad usando Weibull
+      let needScore: number | null = null
+      let needConfidence: number | null = null
+      let daysOverdue: number | null = null
+      let urgencyLevel: 'very-high' | 'high' | 'medium' | 'low' | null = null
+      let needReason: string | null = null
+
+      if (purchaseDates.length >= 2) {
+        // Obtener producto info para Weibull
+        const { data: productData } = await supabase
+          .from('products')
+          .select('id, name, category_id, categories(id, name, icon)')
+          .eq('id', productId)
+          .single()
+
+        if (productData) {
+          const history: PurchaseHistory = {
+            product_id: productData.id,
+            product_name: productData.name,
+            category_id: productData.category_id,
+            category_name: (productData as any).categories?.name || null,
+            category_icon: (productData as any).categories?.icon || null,
+            purchase_dates: purchaseDates
+          }
+
+          const predictions = weibullPredictionService.predictNeeds([history], new Date())
+          if (predictions.length > 0) {
+            const prediction = predictions[0]
+            needScore = prediction.p_need_score
+            needConfidence = prediction.confidence
+            daysOverdue = prediction.days_overdue
+            needReason = prediction.reason
+
+            // Determinar nivel de urgencia
+            if (needScore >= 0.8) urgencyLevel = 'very-high'
+            else if (needScore >= 0.6) urgencyLevel = 'high'
+            else if (needScore >= 0.4) urgencyLevel = 'medium'
+            else urgencyLevel = 'low'
+          }
+        }
+      }
+
       return {
         firstPurchasedAt,
         lastPurchasedAt,
@@ -318,7 +367,12 @@ class ProductService {
         minPrice,
         lastPrice,
         averagePrice,
-        priceHistory
+        priceHistory,
+        needScore,
+        needConfidence,
+        daysOverdue,
+        urgencyLevel,
+        needReason
       }
     } catch (error) {
       console.error('Error getting product stats:', error)
@@ -331,7 +385,12 @@ class ProductService {
         minPrice: null,
         lastPrice: null,
         averagePrice: null,
-        priceHistory: []
+        priceHistory: [],
+        needScore: null,
+        needConfidence: null,
+        daysOverdue: null,
+        urgencyLevel: null,
+        needReason: null
       }
     }
   }

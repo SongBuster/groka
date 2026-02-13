@@ -1,5 +1,6 @@
 import { supabase } from '../lib/supabase'
 import suggestionPreferencesService from './suggestionPreferencesService'
+import weibullPredictionService, { type PurchaseHistory, type ProductNeedScore } from './weibullPredictionService'
 
 export type ProductSuggestion = {
   product_id: string
@@ -11,25 +12,28 @@ export type ProductSuggestion = {
   days_since_last_purchase: number
   average_days_between_purchases: number
   purchase_count: number
-  urgency_score: number // Cuanto mayor, más urgente (days_since / average_days)
+  urgency_score: number // Score de necesidad basado en Weibull [0-1+]
+  confidence: number // Confianza en la predicción [0-1]
+  days_overdue: number // Días de retraso vs esperado
+  reason: string // Explicación del score
 }
 
 class SmartSuggestionsService {
   /**
-   * Obtiene sugerencias de productos basadas en patrones de compra históricos
+   * Obtiene sugerencias de productos usando predicción Weibull avanzada
    * 
-   * Lógica:
-   * 1. Obtener todos los productos comprados al menos minPurchases veces
-   * 2. Calcular el intervalo promedio entre compras
-   * 3. Calcular días desde última compra
-   * 4. Si días desde última compra >= promedio * threshold, sugerir
-   * 5. Calcular urgency_score = días_desde / promedio (>1 = atrasado)
+   * Algoritmo:
+   * 1. Obtener historial de compras por producto
+   * 2. Aplicar distribución Weibull para modelar intervalos
+   * 3. Calcular probabilidad de necesidad con penalizaciones por churn
+   * 4. Filtrar por score mínimo y productos en lista actual
+   * 5. Ordenar por urgencia descendente
    */
   async getSmartSuggestions(
     userId: string, 
     shoppingListId?: string,
-    minPurchases: number = 3,
-    urgencyThreshold: number = 0.8,
+    minPurchases: number = 2,
+    minScore: number = 0.3,
     maxRecencyDays: number = 365
   ): Promise<ProductSuggestion[]> {
     try {
@@ -148,9 +152,8 @@ class SmartSuggestionsService {
         }
       }
 
-      // 4. Calcular sugerencias
-      const suggestions: ProductSuggestion[] = []
-      const now = new Date()
+      // 4. Preparar historial para predicción Weibull
+      const history: PurchaseHistory[] = []
       const hiddenProductIds = await suggestionPreferencesService.getHiddenProductIds(userId)
 
       for (const [, data] of productMap.entries()) {
@@ -168,82 +171,49 @@ class SmartSuggestionsService {
         // Filtrar productos con suficiente historial
         if (data.purchase_dates.length < minPurchases) continue
 
-        // Ordenar fechas
-        const sortedDates = data.purchase_dates.sort((a, b) => a.getTime() - b.getTime())
-        
-        // Calcular intervalos entre compras
-        const intervals: number[] = []
-        for (let i = 1; i < sortedDates.length; i++) {
-          const daysBetween = (sortedDates[i].getTime() - sortedDates[i - 1].getTime()) / (1000 * 60 * 60 * 24)
-          intervals.push(daysBetween)
-        }
-
-        // === MEJORA 1: Ponderación por recencia ===
-        // Dar más peso a los intervalos más recientes (últimos 60% tienen más peso)
-        const recentWeight = 1.5  // Los recientes pesan 1.5x más
-        const recentCount = Math.ceil(intervals.length * 0.6) // Últimos 60%
-        
-        let weightedSum = 0
-        let totalWeight = 0
-        
-        intervals.forEach((interval, idx) => {
-          const isRecent = idx >= intervals.length - recentCount
-          const weight = isRecent ? recentWeight : 1.0
-          weightedSum += interval * weight
-          totalWeight += weight
+        history.push({
+          product_id: data.product_id,
+          product_name: data.product_name,
+          category_id: data.category_id,
+          category_name: data.category_name,
+          category_icon: data.category_icon,
+          purchase_dates: data.purchase_dates
         })
-        
-        const averageDays = weightedSum / totalWeight
-
-        // === MEJORA 2: Calcular desviación estándar ===
-        const squaredDiffs = intervals.map(interval => Math.pow(interval - averageDays, 2))
-        const variance = squaredDiffs.reduce((a, b) => a + b, 0) / intervals.length
-        const stdDeviation = Math.sqrt(variance)
-        
-        // Coeficiente de variación (CV): mide irregularidad relativa
-        const coefficientOfVariation = stdDeviation / averageDays
-        
-        // === MEJORA 3: Factor de confianza basado en regularidad ===
-        // CV bajo = alta confianza, CV alto = baja confianza
-        let confidenceFactor = 1.0
-        if (coefficientOfVariation > 1.0) {
-          confidenceFactor = 0.6  // Muy irregular
-        } else if (coefficientOfVariation > 0.5) {
-          confidenceFactor = 0.8  // Bastante irregular
-        } else if (coefficientOfVariation > 0.3) {
-          confidenceFactor = 0.9  // Algo irregular
-        }
-        // Si CV <= 0.3, mantener 1.0 (muy regular)
-
-        // Días desde última compra
-        const lastPurchaseDate = sortedDates[sortedDates.length - 1]
-        const daysSinceLast = (now.getTime() - lastPurchaseDate.getTime()) / (1000 * 60 * 60 * 24)
-
-        // Si la última compra es demasiado antigua, no sugerir (prioriza compras recientes)
-        if (daysSinceLast > maxRecencyDays) continue
-
-        // Calcular urgency score base
-        const baseUrgencyScore = daysSinceLast / averageDays
-        
-        // Aplicar factor de confianza
-        const urgencyScore = baseUrgencyScore * confidenceFactor
-
-        // Solo sugerir si ha pasado suficiente tiempo
-        if (urgencyScore >= urgencyThreshold) {
-          suggestions.push({
-            product_id: data.product_id,
-            product_name: data.product_name,
-            category_id: data.category_id,
-            category_name: data.category_name,
-            category_icon: data.category_icon,
-            last_purchase_date: lastPurchaseDate.toISOString(),
-            days_since_last_purchase: Math.round(daysSinceLast),
-            average_days_between_purchases: Math.round(averageDays),
-            purchase_count: data.purchase_dates.length,
-            urgency_score: parseFloat(urgencyScore.toFixed(2))
-          })
-        }
       }
+
+      // 5. Aplicar predicción Weibull
+      const predictions: ProductNeedScore[] = weibullPredictionService.predictNeeds(history, new Date())
+
+      // 6. Convertir a formato de sugerencias y filtrar
+      const suggestions: ProductSuggestion[] = predictions
+        .filter(p => {
+          // Filtrar por score mínimo
+          if (p.p_need_score < minScore) return false
+          
+          // Filtrar por antigüedad máxima
+          if (p.days_since_last_purchase > maxRecencyDays) return false
+          
+          return true
+        })
+        .map(p => ({
+          product_id: p.product_id,
+          product_name: p.product_name,
+          category_id: p.category_id,
+          category_name: p.category_name,
+          category_icon: p.category_icon,
+          last_purchase_date: p.last_purchase_date.toISOString(),
+          days_since_last_purchase: p.days_since_last_purchase,
+          average_days_between_purchases: Math.round(
+            p.expected_next_date 
+              ? (p.expected_next_date.getTime() - p.last_purchase_date.getTime()) / (1000 * 60 * 60 * 24)
+              : 0
+          ),
+          purchase_count: p.purchase_count,
+          urgency_score: parseFloat(p.p_need_score.toFixed(2)),
+          confidence: p.confidence,
+          days_overdue: p.days_overdue,
+          reason: p.reason
+        }))
 
       // 5. Filtrar productos ya en la lista actual (si se proporciona)
       let finalSuggestions = suggestions

@@ -1,0 +1,59 @@
+
+PROMPT:
+He vuelto a tener problemas con la lista inteligente. He metido muchos tickets antiguos de 2024 y 2025 y me está sugiriendo compras que no hago desde hace bastante tiempo.
+No estamos gestionando bien esto y se me ha ocurrido una idea.
+Basándonos en las fechas de los tickets y lso productos comprados en ese ticket vamos a definir un P_need_score, es decir una puntuación de que un producto sea probable que necesitemos comprar.
+Este p_need_score se recalculará siempre que se introduzca una compra de un producto en la base de datos, ya sea por introducir un ticket manualmente, subir un PDF y parsearlo o que se detecte un ticket por el proceso de recepción de correos. Incluso podemos guardar este valor en una tabla de la base de datos por producto y usuario para que sea más rápido cogerlo para configurar la lista inteligente.
+Entonces, para la lista inteligente, podremos mostrar aquellos productos (que no estén ya en la lista de la compra para comprar),que tengan más p_need_score y establecer rangos de prioridad a partir de este valor.
+Tengo un pseudo código que lo calcula a partir de fecha de compra y producto en un arrray, lo puedes adaptar para utilizarlo en nuestra app?
+function predictNeed(history, today):
+  # history: array of {product, date}
+
+  build map purchasesByProduct
+
+  globalDowWeights = buildDowWeights(history)  # opcional
+
+  results = []
+  for each product p:
+    dates = sort(purchasesByProduct[p])
+    if len(dates) < 2: continue
+
+    intervals = diffDays(dates)
+    intervals = removeZero(intervals)
+    intervals = clipOutliers(intervals, p10, p90)
+
+    d = daysBetween(today, last(dates))
+
+    if len(intervals) >= 3:
+      (k, λ) = fitWeibullByMoments(intervals)
+    else:
+      (k, λ) = fallbackFromUserGlobal(history)  # p.ej. k=2, λ=mediana global
+
+    p_base = 1 - exp(-(d/λ)^k)
+
+    m_dow = dowMultiplier(dates, today)  # Laplace smoothing; si no hay datos usa globalDowWeights o 1
+    p_season = clamp(p_base * m_dow, 0, 1)
+
+    expected = λ * Gamma(1 + 1/k)
+    r = d / expected
+
+    churnPenalty = 1
+    if d > 180 OR r > 3:
+      churnPenalty = exp(-0.45*(r-1))
+
+    p_final = p_season * churnPenalty
+
+    conf = computeConfidence(intervals)
+    p_scored = p_final * (0.5 + 0.5*conf)
+
+    results.push({
+      product: p,
+      p_need: p_scored,
+      expected_next_date: last(dates) + expected days,
+      days_overdue: d - expected,
+      confidence: conf,
+      reason: explain(p, d, expected, conf)
+    })
+
+  sort results by p_need desc
+  return results
