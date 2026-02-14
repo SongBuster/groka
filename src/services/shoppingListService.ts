@@ -180,6 +180,16 @@ class ShoppingListService {
     return data as ShoppingListItem
   }
 
+  async addItemWithProductId(listId: string, name: string, quantity: number, userId: string, productId: string, categoryId: string | null = null): Promise<ShoppingListItem> {
+    const { data, error } = await supabase
+      .from('shopping_list_items')
+      .insert({ list_id: listId, user_id: userId, name, quantity, product_id: productId, category_id: categoryId } as any)
+      .select('*')
+      .single()
+    if (error) throw error
+    return data as ShoppingListItem
+  }
+
   async updateItem(itemId: string, updates: Partial<Pick<ShoppingListItem,'name'|'quantity'|'purchased'|'category_id'|'notes'>>): Promise<void> {
     // No filtramos por user_id - las políticas RLS controlan el acceso
     const { error } = await (supabase as any)

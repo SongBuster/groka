@@ -219,13 +219,25 @@ class SmartSuggestionsService {
       let finalSuggestions = suggestions
       
       if (shoppingListId) {
-        const { data: currentItems } = await supabase
+        // Obtener items NO comprados (para comprar) y COMPRADOS RECIENTEMENTE (máx 25)
+        const { data: allItems } = await supabase
           .from('shopping_list_items')
-          .select('name')
+          .select('name, product_id, purchased')
           .eq('list_id', shoppingListId)
-          .eq('purchased', false)
 
-        if (currentItems && currentItems.length > 0) {
+        if (allItems && allItems.length > 0) {
+          // Separar items no comprados y comprados recientes
+          const unpurchasedItems = (allItems as any[]).filter((i: any) => i.purchased === false)
+          const purchasedItems = (allItems as any[])
+            .filter((i: any) => i.purchased === true)
+            .slice(0, 25) // Máximo 25 comprados recientemente
+
+          const itemsToExclude = [...unpurchasedItems, ...purchasedItems]
+
+          if (itemsToExclude.length === 0) {
+            return suggestions.sort((a, b) => b.urgency_score - a.urgency_score)
+          }
+
           // Normalizar nombres para comparación más robusta
           const normalize = (s: string) => s
             .toLowerCase()
@@ -235,11 +247,25 @@ class SmartSuggestionsService {
             .replace(/\s+/g, ' ')
             .trim()
           
-          const currentNames = new Set((currentItems as any[]).map((i: any) => normalize(i.name)))
-          
-          finalSuggestions = suggestions.filter(s => 
-            !currentNames.has(normalize(s.product_name))
-          )
+          const excludeNames = new Set(itemsToExclude.map((i: any) => normalize(i.name)))
+          const excludeProductIds = new Set(itemsToExclude
+            .map((i: any) => i.product_id)
+            .filter((id: any) => typeof id === 'string' && id.length > 0))
+
+          finalSuggestions = suggestions.filter(s => {
+            // Primero: si tiene product_id, excluir si coincide
+            if (s.product_id && excludeProductIds.has(s.product_id)) {
+              return false
+            }
+            
+            // Segundo: filtrar por nombre normalizado
+            const normalizedName = normalize(s.product_name)
+            if (excludeNames.has(normalizedName)) {
+              return false
+            }
+            
+            return true
+          })
         }
       }
 

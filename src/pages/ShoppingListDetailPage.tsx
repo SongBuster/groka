@@ -1,6 +1,7 @@
 import { useEffect, useMemo, useState, useRef } from 'react'
 import { useParams, Link } from 'react-router-dom'
 import { useAuthStore } from '../stores/authStore'
+import { supabase } from '../lib/supabase'
 import shoppingListService, { type ShoppingListItem } from '../services/shoppingListService'
 import productService, { type ProductWithCategory } from '../services/productService'
 import smartSuggestionsService, { type ProductSuggestion } from '../services/smartSuggestionsService'
@@ -55,13 +56,30 @@ export default function ShoppingListDetailPage() {
       const [data, cats, purchased, list] = await Promise.all([
         shoppingListService.getItems(id),
         shoppingListService.getCategories(user.id),
-        shoppingListService.getRecentlyPurchasedItems(id, 20),
+        shoppingListService.getRecentlyPurchasedItems(id, 25),
         shoppingListService.getList(id, user.id)
       ])
       setItems(data)
       setCategories(cats)
       setRecentlyPurchased(purchased)
       if (list) setListName(list.name)
+      
+      // Si hay más de 25 comprados recientemente, eliminar completamente los más antiguos
+      if (purchased.length >= 25) {
+        const { data: allPurchased } = await supabase
+          .from('shopping_list_items')
+          .select('id, updated_at')
+          .eq('list_id', id)
+          .eq('purchased', true)
+          .order('updated_at', { ascending: false })
+        
+        if (allPurchased && allPurchased.length > 25) {
+          const toDelete = allPurchased.slice(25).map((item: any) => item.id)
+          for (const itemId of toDelete) {
+            await shoppingListService.deleteItem(itemId)
+          }
+        }
+      }
       
       // Restaurar posición de scroll si se guardó
       if (preserveScroll) {
@@ -165,7 +183,11 @@ export default function ShoppingListDetailPage() {
         inputRef.current &&
         !inputRef.current.contains(e.target as Node)
       ) {
-        setShowSuggestions(false)
+        // Solo cerrar si el click no está en un botón de sugerencia
+        const target = e.target as HTMLElement
+        if (!target.closest('button[type="button"]')) {
+          setShowSuggestions(false)
+        }
       }
     }
 
@@ -226,7 +248,15 @@ export default function ShoppingListDetailPage() {
     setSmartSuggestions(prev => prev.filter(s => s.product_id !== suggestion.product_id))
     
     try {
-      await shoppingListService.addItem(id, suggestion.product_name, 1, user.id)
+      // Pasar el product_id directamente desde la sugerencia
+      await shoppingListService.addItemWithProductId(
+        id,
+        suggestion.product_name,
+        1,
+        user.id,
+        suggestion.product_id,
+        suggestion.category_id
+      )
       // Recargar ambas listas en paralelo
       await Promise.all([load(), loadSmartSuggestions()])
     } catch (e) {
@@ -1026,7 +1056,12 @@ export default function ShoppingListDetailPage() {
                   {suggestions.map((product, idx) => (
                     <button
                       key={product.id}
-                      onClick={() => selectSuggestion(product)}
+                      type="button"
+                      onClick={(e) => {
+                        e.preventDefault()
+                        e.stopPropagation()
+                        selectSuggestion(product)
+                      }}
                       className={`w-full text-left px-4 py-2 hover:bg-secondary-100 transition ${
                         idx === selectedIndex ? 'bg-primary-50' : ''
                       } ${idx === 0 ? 'rounded-t-lg' : ''} ${idx === suggestions.length - 1 ? 'rounded-b-lg' : ''} border-b border-secondary-100 last:border-b-0`}
@@ -1077,7 +1112,12 @@ export default function ShoppingListDetailPage() {
                   {suggestions.map((product, idx) => (
                     <button
                       key={product.id}
-                      onClick={() => selectSuggestion(product)}
+                      type="button"
+                      onClick={(e) => {
+                        e.preventDefault()
+                        e.stopPropagation()
+                        selectSuggestion(product)
+                      }}
                       className={`w-full text-left px-3 py-2 hover:bg-secondary-100 transition ${
                         idx === selectedIndex ? 'bg-primary-50' : ''
                       } ${idx === 0 ? 'rounded-t-lg' : ''} ${idx === suggestions.length - 1 ? 'rounded-b-lg' : ''} border-b border-secondary-100 last:border-b-0`}
