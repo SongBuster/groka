@@ -174,7 +174,7 @@ class ShoppingListService {
     const { data, error } = await supabase
       .from('shopping_list_items')
       .insert({ list_id: listId, user_id: userId, name, quantity, product_id, category_id } as any)
-      .select('*')
+      .select('*, category:categories(id,name,icon,color)')
       .single()
     if (error) throw error
     return data as ShoppingListItem
@@ -184,7 +184,7 @@ class ShoppingListService {
     const { data, error } = await supabase
       .from('shopping_list_items')
       .insert({ list_id: listId, user_id: userId, name, quantity, product_id: productId, category_id: categoryId } as any)
-      .select('*')
+      .select('*, category:categories(id,name,icon,color)')
       .single()
     if (error) throw error
     return data as ShoppingListItem

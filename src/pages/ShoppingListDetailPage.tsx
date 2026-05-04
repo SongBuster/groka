@@ -42,16 +42,34 @@ export default function ShoppingListDetailPage() {
   const [showSuggestionDetail, setShowSuggestionDetail] = useState(false)
   const [showListMenu, setShowListMenu] = useState(false)
   const listMenuRef = useRef<HTMLDivElement>(null)
+  const hasLoadedRef = useRef(false)
+
+  const getCacheKey = () => `groka_list_${id}`
 
   const load = async (preserveScroll = false) => {
     if (!user?.id || !id) return
-    
-    // Guardar posición de scroll si se solicita
+
     if (preserveScroll) {
       scrollPositionRef.current = window.scrollY
     }
-    
-    setLoading(true)
+
+    // On first load, show cached data immediately instead of a spinner
+    const isFirstLoad = !hasLoadedRef.current
+    hasLoadedRef.current = true
+    if (isFirstLoad) {
+      try {
+        const cached = localStorage.getItem(getCacheKey())
+        if (cached) {
+          const c = JSON.parse(cached)
+          if (c.items) setItems(c.items)
+          if (c.recentlyPurchased) setRecentlyPurchased(c.recentlyPurchased)
+          if (c.listName) setListName(c.listName)
+          if (c.categories) setCategories(c.categories)
+          setLoading(false)
+        }
+      } catch { /* ignore cache errors */ }
+    }
+
     try {
       const [data, cats, purchased, list] = await Promise.all([
         shoppingListService.getItems(id),
@@ -63,7 +81,17 @@ export default function ShoppingListDetailPage() {
       setCategories(cats)
       setRecentlyPurchased(purchased)
       if (list) setListName(list.name)
-      
+
+      // Persist to cache for next visit
+      try {
+        localStorage.setItem(getCacheKey(), JSON.stringify({
+          items: data,
+          recentlyPurchased: purchased,
+          listName: list?.name,
+          categories: cats,
+        }))
+      } catch { /* ignore if storage full */ }
+
       // Si hay más de 25 comprados recientemente, eliminar completamente los más antiguos
       if (purchased.length >= 25) {
         const { data: allPurchased } = await supabase
@@ -72,7 +100,7 @@ export default function ShoppingListDetailPage() {
           .eq('list_id', id)
           .eq('purchased', true)
           .order('updated_at', { ascending: false })
-        
+
         if (allPurchased && allPurchased.length > 25) {
           const toDelete = allPurchased.slice(25).map((item: any) => item.id)
           for (const itemId of toDelete) {
@@ -80,8 +108,7 @@ export default function ShoppingListDetailPage() {
           }
         }
       }
-      
-      // Restaurar posición de scroll si se guardó
+
       if (preserveScroll) {
         requestAnimationFrame(() => {
           window.scrollTo(0, scrollPositionRef.current)
@@ -210,60 +237,85 @@ export default function ShoppingListDetailPage() {
 
   const addItem = async () => {
     if (!user?.id || !id || !input.trim()) return
-    try {
-      // Verificar si el producto ya existe en la lista (como comprado)
-      const normalizedInput = input.trim().toLowerCase()
-      const existingItem = [...items, ...recentlyPurchased].find(
-        item => item.name.toLowerCase() === normalizedInput
-      )
-      
-      if (existingItem && existingItem.purchased) {
-        // Si ya existe como comprado, marcarlo como no comprado
-        await shoppingListService.updateItem(
-          existingItem.id,
-          { purchased: false, quantity: quantity || 1 }
-        )
-      } else if (!existingItem) {
-        // Si no existe, crear uno nuevo
-        await shoppingListService.addItem(id, input.trim(), quantity || 1, user.id)
+
+    const name = input.trim()
+    const qty = quantity || 1
+    setInput('')
+    setQuantity(1)
+    setSuggestions([])
+    setShowSuggestions(false)
+
+    const normalizedInput = name.toLowerCase()
+    const existingItem = [...items, ...recentlyPurchased].find(
+      item => item.name.toLowerCase() === normalizedInput
+    )
+
+    if (existingItem && existingItem.purchased) {
+      // Restore from purchased list optimistically
+      const restoredItem = { ...existingItem, purchased: false, quantity: qty }
+      setRecentlyPurchased(prev => prev.filter(i => i.id !== existingItem.id))
+      setItems(prev => [...prev, restoredItem].sort((a, b) => a.position - b.position || a.created_at.localeCompare(b.created_at)))
+      try {
+        await shoppingListService.updateItem(existingItem.id, { purchased: false, quantity: qty })
+        loadSmartSuggestions()
+      } catch (e) {
+        console.error(e)
+        setItems(prev => prev.filter(i => i.id !== existingItem.id))
+        setRecentlyPurchased(prev => [existingItem, ...prev])
+        alert({ title: 'Error', message: 'No se pudo añadir el producto', type: 'error' })
       }
-      // Si existe pero no está comprado, no hacer nada (evitar duplicados)
-      
-      setInput('')
-      setQuantity(1)
-      setSuggestions([])
-      setShowSuggestions(false)
-      // Recargar ambas listas en paralelo
-      await Promise.all([load(), loadSmartSuggestions()])
-    } catch (e) {
-      console.error(e)
-      alert({ title: 'Error', message: 'No se pudo añadir el producto', type: 'error' })
+    } else if (!existingItem) {
+      // Add new item optimistically with a temp id
+      const tempId = `temp_${Date.now()}`
+      const tempItem: ShoppingListItem = {
+        id: tempId, list_id: id, user_id: user.id,
+        product_id: null, category_id: null, name, quantity: qty,
+        purchased: false, position: items.length + 1, notes: null,
+        created_at: new Date().toISOString(), updated_at: new Date().toISOString(),
+      }
+      setItems(prev => [...prev, tempItem])
+      try {
+        const newItem = await shoppingListService.addItem(id, name, qty, user.id)
+        setItems(prev => prev.map(i => i.id === tempId ? newItem : i))
+        loadSmartSuggestions()
+      } catch (e) {
+        console.error(e)
+        setItems(prev => prev.filter(i => i.id !== tempId))
+        alert({ title: 'Error', message: 'No se pudo añadir el producto', type: 'error' })
+      }
     }
+    // Si ya existe y no está comprado, no hacer nada (evitar duplicados)
   }
 
   const addSmartSuggestion = async (suggestion: ProductSuggestion) => {
     if (!user?.id || !id) return
-    
-    // Eliminar optimistamente de las sugerencias
+
     setSmartSuggestions(prev => prev.filter(s => s.product_id !== suggestion.product_id))
-    
+
+    // Add to list optimistically with known category data
+    const tempId = `temp_${Date.now()}`
+    const cat = categories.find(c => c.id === suggestion.category_id)
+    const tempItem: ShoppingListItem = {
+      id: tempId, list_id: id, user_id: user.id,
+      product_id: suggestion.product_id, category_id: suggestion.category_id || null,
+      name: suggestion.product_name, quantity: 1, purchased: false,
+      position: items.length + 1, notes: null,
+      created_at: new Date().toISOString(), updated_at: new Date().toISOString(),
+      category: cat ? { id: cat.id, name: cat.name, icon: cat.icon, color: cat.color } : null,
+    }
+    setItems(prev => [...prev, tempItem])
+
     try {
-      // Pasar el product_id directamente desde la sugerencia
-      await shoppingListService.addItemWithProductId(
-        id,
-        suggestion.product_name,
-        1,
-        user.id,
-        suggestion.product_id,
-        suggestion.category_id
+      const newItem = await shoppingListService.addItemWithProductId(
+        id, suggestion.product_name, 1, user.id, suggestion.product_id, suggestion.category_id
       )
-      // Recargar ambas listas en paralelo
-      await Promise.all([load(), loadSmartSuggestions()])
+      setItems(prev => prev.map(i => i.id === tempId ? newItem : i))
+      loadSmartSuggestions()
     } catch (e) {
       console.error(e)
+      setItems(prev => prev.filter(i => i.id !== tempId))
+      setSmartSuggestions(prev => [...prev, suggestion])
       alert({ title: 'Error', message: 'No se pudo añadir el producto', type: 'error' })
-      // Si falla, recargar las sugerencias originales
-      await loadSmartSuggestions()
     }
   }
 
@@ -273,12 +325,27 @@ export default function ShoppingListDetailPage() {
     setSuggestions([])
     setSelectedIndex(-1)
     setInput('')
+
+    const qty = quantity || 1
+    const tempId = `temp_${Date.now()}`
+    const tempItem: ShoppingListItem = {
+      id: tempId, list_id: id, user_id: user.id,
+      product_id: product.id, category_id: product.category_id || null,
+      name: product.name, quantity: qty, purchased: false,
+      position: items.length + 1, notes: null,
+      created_at: new Date().toISOString(), updated_at: new Date().toISOString(),
+      category: product.category || null,
+    }
+    setItems(prev => [...prev, tempItem])
+
     try {
-      await shoppingListService.addItem(id, product.name, quantity || 1, user.id)
+      const newItem = await shoppingListService.addItem(id, product.name, qty, user.id)
+      setItems(prev => prev.map(i => i.id === tempId ? newItem : i))
       setQuantity(1)
-      await Promise.all([load(), loadSmartSuggestions()])
+      loadSmartSuggestions()
     } catch (e) {
       console.error(e)
+      setItems(prev => prev.filter(i => i.id !== tempId))
       alert({ title: 'Error', message: 'No se pudo añadir el producto', type: 'error' })
     }
   }
@@ -316,24 +383,45 @@ export default function ShoppingListDetailPage() {
   }
 
   const markPurchased = async (item: ShoppingListItem) => {
-    if (!user?.id) return
+    if (!user?.id || item.purchased) return
+
+    // Optimistic: move to purchased immediately
+    const purchasedItem = { ...item, purchased: true, updated_at: new Date().toISOString() }
+    setItems(prev => prev.filter(i => i.id !== item.id))
+    setRecentlyPurchased(prev => [purchasedItem, ...prev].slice(0, 25))
+
     try {
-      if (item.purchased) return
       await shoppingListService.updateItem(item.id, { purchased: true })
-      await Promise.all([load(true), loadSmartSuggestions()])
+      loadSmartSuggestions()
     } catch (e) {
       console.error(e)
+      // Rollback
+      setItems(prev => [...prev, item].sort((a, b) => a.position - b.position || a.created_at.localeCompare(b.created_at)))
+      setRecentlyPurchased(prev => prev.filter(i => i.id !== item.id))
     }
   }
 
   const deleteItem = async (item: ShoppingListItem) => {
     const ok = await confirm({ title: 'Eliminar', message: `¿Eliminar "${item.name}"?`, type: 'warning', confirmText: 'Eliminar', cancelText: 'Cancelar' })
     if (!ok || !user?.id) return
+
+    // Optimistic: remove from list immediately
+    if (item.purchased) {
+      setRecentlyPurchased(prev => prev.filter(i => i.id !== item.id))
+    } else {
+      setItems(prev => prev.filter(i => i.id !== item.id))
+    }
+
     try {
       await shoppingListService.deleteItem(item.id)
-      await Promise.all([load(true), loadSmartSuggestions()])
     } catch (e) {
       console.error(e)
+      // Rollback
+      if (item.purchased) {
+        setRecentlyPurchased(prev => [item, ...prev])
+      } else {
+        setItems(prev => [...prev, item].sort((a, b) => a.position - b.position || a.created_at.localeCompare(b.created_at)))
+      }
     }
   }
 
@@ -378,33 +466,48 @@ export default function ShoppingListDetailPage() {
 
   const saveEdit = async () => {
     if (!editingItem || !user?.id) return
+
+    const updates = { quantity: editQuantity, category_id: editCategory || null, notes: editNotes || null }
+    const updatedItem = { ...editingItem, ...updates, updated_at: new Date().toISOString() }
+
+    // Optimistic: reflect changes immediately
+    if (editingItem.purchased) {
+      setRecentlyPurchased(prev => prev.map(i => i.id === editingItem.id ? updatedItem : i))
+    } else {
+      setItems(prev => prev.map(i => i.id === editingItem.id ? updatedItem : i))
+    }
+    setEditingItem(null)
+
     try {
-      await shoppingListService.updateItem(
-        editingItem.id,
-        {
-          quantity: editQuantity,
-          category_id: editCategory || null,
-          notes: editNotes || null
-        }
-      )
-      setEditingItem(null)
-      await load()
+      await shoppingListService.updateItem(editingItem.id, updates)
     } catch (e) {
       console.error(e)
+      // Rollback
+      if (editingItem.purchased) {
+        setRecentlyPurchased(prev => prev.map(i => i.id === editingItem.id ? editingItem : i))
+      } else {
+        setItems(prev => prev.map(i => i.id === editingItem.id ? editingItem : i))
+      }
+      alert({ title: 'Error', message: 'No se pudo guardar el producto', type: 'error' })
     }
   }
 
   const markUnpurchased = async (item: ShoppingListItem) => {
-    if (!user?.id) return
+    if (!user?.id || !item.purchased) return
+
+    // Optimistic: restore to pending list immediately
+    const restoredItem = { ...item, purchased: false, quantity: 1, notes: null, updated_at: new Date().toISOString() }
+    setRecentlyPurchased(prev => prev.filter(i => i.id !== item.id))
+    setItems(prev => [...prev, restoredItem].sort((a, b) => a.position - b.position || a.created_at.localeCompare(b.created_at)))
+
     try {
-      if (!item.purchased) return
-      await shoppingListService.updateItem(
-        item.id,
-        { purchased: false, quantity: 1, notes: null }
-      )
-      await Promise.all([load(), loadSmartSuggestions()])
+      await shoppingListService.updateItem(item.id, { purchased: false, quantity: 1, notes: null })
+      loadSmartSuggestions()
     } catch (e) {
       console.error(e)
+      // Rollback
+      setItems(prev => prev.filter(i => i.id !== item.id))
+      setRecentlyPurchased(prev => [item, ...prev])
     }
   }
 
